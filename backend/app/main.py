@@ -1,6 +1,9 @@
 """
-Aplicación FastAPI principal.
-Configuración de CORS, routers, logging.
+filename: main.py
+author: Suley & Jhonatan
+date: 2026-05-12
+version: 1.0
+description: Aplicación FastAPI principal. Configuración de CORS, routers, logging.
 """
 
 import logging
@@ -8,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.routers import auth, data, etl
+from app.v1.api import router as v1_router
 
 # Configurar logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -34,9 +37,7 @@ app.add_middleware(
 )
 
 # Incluir routers
-app.include_router(auth.router)
-app.include_router(data.router)
-app.include_router(etl.router)
+app.include_router(v1_router)
 
 
 @app.get("/")
