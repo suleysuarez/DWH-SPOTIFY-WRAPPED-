@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from "react";
 import { endpoints, ApiError } from "@/lib/api";
 import type { EtlLogLine } from "@/types/etl";
 import { Button } from "@/components/ui/button";
-import { Play, RefreshCw, CheckCircle2, XCircle, Terminal } from "lucide-react";
+import { Play, RefreshCw, CheckCircle2, XCircle, Terminal, Info, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 interface RunEtlPanelProps {
@@ -16,11 +16,11 @@ interface RunEtlPanelProps {
 
 type RunStatus = "idle" | "running" | "success" | "error";
 
-const LOG_ICONS: Record<EtlLogLine["type"], string> = {
-  success: "✅",
-  error: "❌",
-  info: "ℹ️",
-  warning: "⚠️",
+const LOG_ICONS: Record<EtlLogLine["type"], React.ReactNode> = {
+  success: <CheckCircle2 className="w-3 h-3" />,
+  error: <XCircle className="w-3 h-3" />,
+  info: <Info className="w-3 h-3" />,
+  warning: <AlertCircle className="w-3 h-3" />,
 };
 
 const LOG_COLORS: Record<EtlLogLine["type"], string> = {
@@ -31,13 +31,13 @@ const LOG_COLORS: Record<EtlLogLine["type"], string> = {
 };
 
 function parseLogLine(raw: string): EtlLogLine {
-  if (raw.includes("✅") || raw.toLowerCase().includes("success") || raw.toLowerCase().includes("loaded") || raw.toLowerCase().includes("obtained")) {
+  if (raw.toLowerCase().includes("success") || raw.toLowerCase().includes("loaded") || raw.toLowerCase().includes("obtained")) {
     return { type: "success", text: raw };
   }
-  if (raw.includes("❌") || raw.toLowerCase().includes("error") || raw.toLowerCase().includes("failed")) {
+  if (raw.toLowerCase().includes("error") || raw.toLowerCase().includes("failed")) {
     return { type: "error", text: raw };
   }
-  if (raw.includes("⚠️") || raw.toLowerCase().includes("warn")) {
+  if (raw.toLowerCase().includes("warn")) {
     return { type: "warning", text: raw };
   }
   return { type: "info", text: raw };
@@ -59,7 +59,7 @@ export default function RunEtlPanel({ onRunComplete }: RunEtlPanelProps) {
 
     // Simulate progressive log display while waiting for API
     const progressLogs: EtlLogLine[] = [
-      { type: "info", text: "[ ℹ️ ] Iniciando proceso ETL..." },
+      { type: "info", text: "Iniciando proceso ETL..." },
     ];
     setLogs([...progressLogs]);
 
@@ -78,7 +78,7 @@ export default function RunEtlPanel({ onRunComplete }: RunEtlPanelProps) {
       if (result.status === "success" || result.status === "started") {
         setLogs((prev) => [
           ...prev,
-          { type: "success", text: "[ ✅ ] ETL completado exitosamente." },
+          { type: "success", text: "ETL completado exitosamente." },
         ]);
         setStatus("success");
         toast.success("ETL completado", { description: "Datos sincronizados correctamente." });
@@ -86,7 +86,7 @@ export default function RunEtlPanel({ onRunComplete }: RunEtlPanelProps) {
       } else {
         setLogs((prev) => [
           ...prev,
-          { type: "error", text: `[ ❌ ] ${result.message ?? "ETL finalizó con errores."}` },
+          { type: "error", text: `${result.message ?? "ETL finalizó con errores."}` },
         ]);
         setStatus("error");
         toast.error("ETL falló", { description: result.message });
@@ -95,7 +95,7 @@ export default function RunEtlPanel({ onRunComplete }: RunEtlPanelProps) {
       const message = err instanceof ApiError ? err.message : "Error inesperado al ejecutar ETL.";
       setLogs((prev) => [
         ...prev,
-        { type: "error", text: `[ ❌ ] ${message}` },
+        { type: "error", text: `${message}` },
       ]);
       setStatus("error");
       toast.error("Error ETL", { description: message });
@@ -202,7 +202,7 @@ export default function RunEtlPanel({ onRunComplete }: RunEtlPanelProps) {
                 animation: "fadeInLine 0.15s ease-out",
               }}
             >
-              <span className="flex-shrink-0 opacity-70">
+              <span className="flex-shrink-0 opacity-70 mt-0.5">
                 {LOG_ICONS[log.type]}
               </span>
               <span className="font-mono">{log.text}</span>
