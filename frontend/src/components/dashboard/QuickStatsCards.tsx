@@ -1,125 +1,119 @@
 /**
- * QuickStatsCards — 4 KPI cards: total tracks, artists, last sync, ETL status.
+ * QuickStatsCards — KPI cards para el dashboard.
+ * Muestra: artistas, canciones, reproducciones, minutos, cancion top.
  */
-
-import type { QuickStats } from "@/types/history";
 import { Skeleton } from "@/components/ui/SkeletonCard";
-import { Music, Users, RefreshCw, Activity } from "lucide-react";
+import { Users, Music, Play, Clock, Star } from "lucide-react";
+
+interface QuickStats {
+  total_tracks: number;
+  total_artists: number;
+  total_plays: number;
+  total_minutes: number;
+  last_sync: string | null;
+  etl_status: string;
+  top_track: string | null;
+  top_track_artist: string | null;
+  top_track_plays: number;
+}
 
 interface QuickStatsCardsProps {
   stats: QuickStats | null;
   loading: boolean;
 }
 
-interface StatCardProps {
-  icon: React.ReactNode;
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  accent = false,
+}: {
+  icon: React.ElementType;
   label: string;
-  value: React.ReactNode;
-  accent?: string;
-}
-
-function StatCard({ icon, label, value, accent = "#1DB954" }: StatCardProps) {
+  value: string | number;
+  sub?: string;
+  accent?: boolean;
+}) {
   return (
     <div
-      className="glass-card rounded-xl p-4 flex items-center gap-4"
-      style={{ transition: "transform 0.2s ease, box-shadow 0.2s ease" }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = `0 8px 32px rgba(29,185,84,0.12)`;
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "";
-      }}
+      className="glass-card rounded-xl p-4 flex flex-col gap-2"
+      style={{ border: accent ? "1px solid rgba(29,185,84,0.25)" : undefined }}
     >
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-        style={{ background: `${accent}18` }}
-      >
-        <div style={{ color: accent }}>{icon}</div>
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-white/40 mb-0.5">{label}</p>
-        <div className="text-lg font-black text-white" style={{ fontFamily: "Nunito, sans-serif" }}>
-          {value}
+      <div className="flex items-center gap-2">
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ background: "rgba(29,185,84,0.12)" }}
+        >
+          <Icon className="w-3.5 h-3.5" style={{ color: "#1DB954" }} />
         </div>
+        <span className="text-xs text-white/40 font-medium">{label}</span>
+      </div>
+      <div>
+        <p
+          className="text-xl font-black text-white truncate"
+          style={{ fontFamily: "Nunito, sans-serif" }}
+        >
+          {value}
+        </p>
+        {sub && <p className="text-xs text-white/30 truncate mt-0.5">{sub}</p>}
       </div>
     </div>
   );
 }
 
-const etlStatusColors: Record<string, string> = {
-  idle: "#B3B3B3",
-  running: "#FFA500",
-  success: "#1DB954",
-  error: "#EF4444",
-};
-
-const etlStatusLabels: Record<string, string> = {
-  idle: "Inactivo",
-  running: "Ejecutando",
-  success: "Exitoso",
-  error: "Error",
-};
-
 export default function QuickStatsCards({ stats, loading }: QuickStatsCardsProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="glass-card rounded-xl p-4 flex items-center gap-4">
-            <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-5 w-12" />
-            </div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="glass-card rounded-xl p-4">
+            <Skeleton className="h-4 w-20 mb-3" />
+            <Skeleton className="h-7 w-16" />
           </div>
         ))}
       </div>
     );
   }
 
-  const formatDate = (date: string | null) => {
-    if (!date) return "—";
-    try {
-      return new Date(date).toLocaleDateString("es-UY", {
-        day: "2-digit",
-        month: "short",
-      });
-    } catch {
-      return "—";
-    }
-  };
-
-  const status = stats?.etl_status ?? "idle";
+  if (!stats) return null;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
       <StatCard
-        icon={<Music className="w-5 h-5" />}
-        label="Total Canciones"
-        value={stats?.total_tracks?.toLocaleString() ?? "—"}
+        icon={Users}
+        label="Artistas"
+        value={stats.total_artists}
+        sub="únicos escuchados"
       />
       <StatCard
-        icon={<Users className="w-5 h-5" />}
-        label="Total Artistas"
-        value={stats?.total_artists?.toLocaleString() ?? "—"}
+        icon={Music}
+        label="Canciones"
+        value={stats.total_tracks}
+        sub="únicas escuchadas"
       />
       <StatCard
-        icon={<RefreshCw className="w-5 h-5" />}
-        label="Última Sincronización"
-        value={formatDate(stats?.last_sync ?? null)}
-        accent="#60A5FA"
+        icon={Play}
+        label="Reproducciones"
+        value={stats.total_plays}
+        sub="en total"
       />
       <StatCard
-        icon={<Activity className="w-5 h-5" />}
-        label="Estado ETL"
-        value={
-          <span style={{ color: etlStatusColors[status] }}>
-            {etlStatusLabels[status]}
-          </span>
+        icon={Clock}
+        label="Minutos"
+        value={stats.total_minutes > 0 ? `${stats.total_minutes}` : "0"}
+        sub="reproducidos"
+      />
+      <StatCard
+        icon={Star}
+        label="Más escuchada"
+        value={stats.top_track ?? "—"}
+        sub={
+          stats.top_track
+            ? `${stats.top_track_artist} · ${stats.top_track_plays}x`
+            : "Sin datos aún"
         }
-        accent={etlStatusColors[status]}
+        accent
       />
     </div>
   );

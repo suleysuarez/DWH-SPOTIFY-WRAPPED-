@@ -3,7 +3,6 @@
  * Sections: DWH Status, ETL History, Run ETL
  * API: GET /v1/etl/status, POST /v1/etl/run
  */
-
 import AppLayout from "@/components/layout/AppLayout";
 import DwhStatusTable from "@/components/etl/DwhStatusTable";
 import EtlHistoryTable from "@/components/etl/EtlHistoryTable";
@@ -45,12 +44,8 @@ export default function Etl() {
             error={error}
             onRetry={refetch}
           />
-
           {/* Section B: ETL History */}
-          <EtlHistoryTable
-            runs={data?.recent_runs ?? null}
-            loading={loading}
-          />
+          <EtlHistoryTable />
         </div>
 
         {/* Right column: Run ETL */}

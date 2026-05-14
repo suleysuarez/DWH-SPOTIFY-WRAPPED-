@@ -2,8 +2,8 @@
 filename: models.py
 author: Suley & Jhonatan
 date: 2026-05-12
-version: 1.0
-description: Modelos SQLAlchemy para el star schema del DWH. Tablas: dim_users, dim_artists, dim_tracks, fact_listening_history, etl_audit, pkce_sessions.
+version: 1.1
+description: Modelos SQLAlchemy para el star schema del DWH.
 """
 
 from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey, Text, Boolean, ARRAY, func
@@ -13,7 +13,7 @@ Base = declarative_base()
 
 
 class DimUsers(Base):
-    """Dimensión de usuarios de Spotify."""
+    """Dimension de usuarios de Spotify."""
     __tablename__ = "dim_users"
     __table_args__ = {"schema": "dwh"}
 
@@ -23,7 +23,7 @@ class DimUsers(Base):
     email = Column(String(255), nullable=True)
     country = Column(String(10), nullable=True)
     followers = Column(Integer, default=0)
-    product = Column(String(20), default="free")  # 'free' o 'premium'
+    product = Column(String(20), default="free")
     spotify_access_token = Column(Text, nullable=False)
     spotify_refresh_token = Column(Text, nullable=True)
     token_expires_at = Column(DateTime, nullable=True)
@@ -31,7 +31,7 @@ class DimUsers(Base):
 
 
 class DimArtists(Base):
-    """Dimensión de artistas."""
+    """Dimension de artistas."""
     __tablename__ = "dim_artists"
     __table_args__ = {"schema": "dwh"}
 
@@ -40,12 +40,13 @@ class DimArtists(Base):
     name = Column(String(255), nullable=False)
     popularity = Column(Integer, nullable=True)
     followers_count = Column(Integer, nullable=True)
-    genres = Column(ARRAY(String), nullable=True)  # TEXT[] nativo de PostgreSQL
+    genres = Column(ARRAY(String), nullable=True)
+    image_url = Column(Text, nullable=True)  # Foto del artista desde Spotify
     loaded_at = Column(DateTime, default=func.now())
 
 
 class DimTracks(Base):
-    """Dimensión de canciones."""
+    """Dimension de canciones."""
     __tablename__ = "dim_tracks"
     __table_args__ = {"schema": "dwh"}
 
@@ -72,22 +73,22 @@ class FactListeningHistory(Base):
     track_id = Column(Integer, ForeignKey("dwh.dim_tracks.track_id"), nullable=False)
     artist_id = Column(Integer, ForeignKey("dwh.dim_artists.artist_id"), nullable=False)
     played_at = Column(DateTime, nullable=False, index=True)
-    hour_of_day = Column(Integer, nullable=True)  # 0-23
-    day_of_week = Column(String(10), nullable=True)  # "Monday", "Tuesday", etc.
-    context_type = Column(String(50), nullable=True)  # 'playlist', 'album', etc.
+    hour_of_day = Column(Integer, nullable=True)
+    day_of_week = Column(String(10), nullable=True)
+    context_type = Column(String(50), nullable=True)
 
 
 class EtlAudit(Base):
-    """Auditoría de ejecuciones ETL."""
+    """Auditoria de ejecuciones ETL."""
     __tablename__ = "etl_audit"
     __table_args__ = {"schema": "dwh"}
 
     audit_id = Column(Integer, primary_key=True, autoincrement=True)
-    spotify_user_id = Column(String(100), nullable=False)  # ID antes de resolver FK
+    spotify_user_id = Column(String(100), nullable=False)
     started_at = Column(DateTime, nullable=False, default=func.now())
     finished_at = Column(DateTime, nullable=True)
     duration_ms = Column(Integer, nullable=True)
-    status = Column(String(20), nullable=False)  # 'success', 'error'
+    status = Column(String(20), nullable=False)
     error_message = Column(Text, nullable=True)
     users_new = Column(Integer, default=0)
     artists_new = Column(Integer, default=0)
@@ -96,8 +97,8 @@ class EtlAudit(Base):
     tracks_skipped = Column(Integer, default=0)
     history_new = Column(Integer, default=0)
     history_skipped = Column(Integer, default=0)
-    cursor_after_ms = Column(String(50), nullable=True)  # Cursor usado en esta ejecución
-    cursor_next_ms = Column(String(50), nullable=True)  # Cursor para próxima ejecución
+    cursor_after_ms = Column(String(50), nullable=True)
+    cursor_next_ms = Column(String(50), nullable=True)
 
 
 class PkceSessions(Base):

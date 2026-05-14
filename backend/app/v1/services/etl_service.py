@@ -2,7 +2,7 @@
 filename: etl_service.py
 author: Suley & Jhonatan
 date: 2026-05-12
-version: 1.0
+version: 1.1
 description: Servicio ETL: orquesta las 3 fases (extract, transform, load) del pipeline de sincronizacion con Spotify.
 """
 
@@ -79,12 +79,17 @@ class EtlService:
         logger.info(f"Transformando {len(artists_data)} artistas...")
         transformed = []
         for artist in artists_data:
+            # Tomar la imagen de mayor resolucion disponible
+            images = artist.get("images", [])
+            image_url = images[0]["url"] if images else None
+
             transformed.append({
                 "spotify_id": artist["id"],
                 "name": artist["name"],
                 "popularity": artist.get("popularity"),
                 "followers_count": artist.get("followers", {}).get("total"),
                 "genres": artist.get("genres", []),
+                "image_url": image_url,
             })
         logger.info(f"Artistas transformados: {len(transformed)}")
         return transformed
@@ -162,11 +167,16 @@ class EtlService:
                 db.add(DimArtists(**artist))
                 new_count += 1
             else:
+                # Actualizar campos que pueden cambiar
                 existing.genres = list(artist.get("genres", []))
                 flag_modified(existing, "genres")
+                existing.popularity = artist.get("popularity", existing.popularity)
+                existing.followers_count = artist.get("followers_count", existing.followers_count)
+                if artist.get("image_url"):
+                    existing.image_url = artist["image_url"]
                 skipped_count += 1
         db.commit()
-        logger.info(f"Artistas cargados: {new_count} nuevos, {skipped_count} saltados")
+        logger.info(f"Artistas cargados: {new_count} nuevos, {skipped_count} actualizados")
         return new_count, skipped_count
 
     @staticmethod
@@ -194,7 +204,6 @@ class EtlService:
                 db.add(DimTracks(**track_data))
                 new_count += 1
             else:
-                # Si el track existente tiene artist_id NULL, repararlo
                 if existing.artist_id is None:
                     artist = db.query(DimArtists).filter_by(
                         spotify_id=track["spotify_artist_id"]
@@ -225,8 +234,6 @@ class EtlService:
                 skipped_count += 1
                 continue
 
-            # Obtener artist_id desde el track.
-            # Si es NULL (track viejo sin artist_id), buscarlo por spotify_artist_id del historial.
             artist_id = track.artist_id
             if artist_id is None:
                 spotify_artist_id = item.get("spotify_artist_id")
@@ -234,7 +241,6 @@ class EtlService:
                     artist = db.query(DimArtists).filter_by(spotify_id=spotify_artist_id).first()
                     if artist:
                         artist_id = artist.artist_id
-                        # Reparar el track para futuras veces
                         track.artist_id = artist_id
                         db.flush()
 

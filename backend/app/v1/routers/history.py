@@ -2,7 +2,7 @@
 filename: history.py
 author: Suley & Jhonatan
 date: 2026-05-12
-version: 1.0
+version: 1.1
 description: Rutas de historial. Endpoints: recently-played, stats, genres, peak-hour.
 """
 import logging
@@ -12,7 +12,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from app.core.database import get_db
-from app.models.models import DimUsers, DimArtists, FactListeningHistory
+from app.models.models import DimUsers, DimArtists, DimTracks, FactListeningHistory
 from app.v1.schemas.history import HistoryResponse, HistoryItemResponse
 from app.v1.services.auth_service import AuthService
 
@@ -45,7 +45,7 @@ def get_recently_played(
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Obtiene historial de reproducción reciente del usuario."""
+    """Obtiene historial de reproduccion reciente del usuario."""
     logger.info(f"Obteniendo historial reciente para {current_user.spotify_id}")
     history = db.query(FactListeningHistory).filter_by(
         user_id=current_user.user_id
@@ -62,9 +62,9 @@ def get_history_stats(
     db: Session = Depends(get_db),
 ):
     """
-    Estadísticas rápidas del DWH.
-    Shape: { total_tracks, total_artists, last_sync, etl_status }
-    Compatible con QuickStats del frontend.
+    Estadisticas rapidas del DWH.
+    Shape: { total_tracks, total_artists, last_sync, etl_status,
+             top_track, top_track_plays, total_minutes, total_plays }
     """
     logger.info(f"Obteniendo stats para {current_user.spotify_id}")
 
@@ -76,15 +76,49 @@ def get_history_stats(
         user_id=current_user.user_id
     ).scalar() or 0
 
+    total_plays = db.query(func.count(FactListeningHistory.id)).filter_by(
+        user_id=current_user.user_id
+    ).scalar() or 0
+
     last_play = db.query(func.max(FactListeningHistory.played_at)).filter_by(
         user_id=current_user.user_id
     ).scalar()
 
+    # Cancion mas escuchada con numero de veces
+    top_track_row = db.query(
+        DimTracks.name,
+        DimArtists.name.label("artist_name"),
+        func.count(FactListeningHistory.id).label("play_count")
+    ).join(
+        DimTracks, FactListeningHistory.track_id == DimTracks.track_id
+    ).join(
+        DimArtists, FactListeningHistory.artist_id == DimArtists.artist_id
+    ).filter(
+        FactListeningHistory.user_id == current_user.user_id
+    ).group_by(
+        DimTracks.name, DimArtists.name
+    ).order_by(desc("play_count")).first()
+
+    # Total de minutos reproducidos (usando duration_ms de dim_tracks)
+    total_ms = db.query(func.sum(DimTracks.duration_ms)).join(
+        FactListeningHistory, FactListeningHistory.track_id == DimTracks.track_id
+    ).filter(
+        FactListeningHistory.user_id == current_user.user_id,
+        DimTracks.duration_ms.isnot(None)
+    ).scalar() or 0
+
+    total_minutes = round(total_ms / 60000, 1)
+
     return {
         "total_tracks": total_tracks,
         "total_artists": total_artists,
-        "last_sync": last_play.isoformat() if last_play else None,
+        "total_plays": total_plays,
+        "total_minutes": total_minutes,
+        "last_sync": last_play.isoformat() + "+00:00" if last_play else None,
         "etl_status": "success" if total_tracks > 0 else "idle",
+        "top_track": top_track_row[0] if top_track_row else None,
+        "top_track_artist": top_track_row[1] if top_track_row else None,
+        "top_track_plays": top_track_row[2] if top_track_row else 0,
     }
 
 
@@ -94,11 +128,10 @@ def get_top_genres(
     db: Session = Depends(get_db),
 ):
     """
-    Top géneros del usuario.
+    Top generos del usuario.
     Shape: { genres: [{genre, count, percentage}], total_plays }
-    Compatible con GenresResponse del frontend.
     """
-    logger.info(f"Obteniendo géneros para {current_user.spotify_id}")
+    logger.info(f"Obteniendo generos para {current_user.spotify_id}")
 
     total_plays = db.query(func.count(FactListeningHistory.id)).filter_by(
         user_id=current_user.user_id
@@ -141,7 +174,6 @@ def get_peak_hour(
     """
     Hora pico del usuario.
     Shape: { hour, play_count, label }
-    Compatible con PeakHour del frontend.
     """
     logger.info(f"Obteniendo peak-hour para {current_user.spotify_id}")
 
@@ -154,11 +186,11 @@ def get_peak_hour(
     ).group_by(FactListeningHistory.hour_of_day).order_by(desc("play_count")).first()
 
     if not row:
-        return {"hour": 0, "play_count": 0, "label": "00:00 – 01:00"}
+        return {"hour": 0, "play_count": 0, "label": "00:00 - 01:00"}
 
     hour = row[0]
     play_count = row[1]
     end = (hour + 1) % 24
-    label = f"{hour:02d}:00 – {end:02d}:00"
+    label = f"{hour:02d}:00 - {end:02d}:00"
 
     return {"hour": hour, "play_count": play_count, "label": label}
