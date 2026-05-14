@@ -1,18 +1,18 @@
 """
-Servicio ETL: extract, transform, load.
-Pipeline completo para sincronizar datos de Spotify al DWH.
+filename: etl_service.py
+author: Suley & Jhonatan
+date: 2026-05-12
+version: 1.0
+description: Servicio ETL: orquesta las 3 fases (extract, transform, load) del pipeline de sincronización con Spotify.
 """
 
 import logging
-import json
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.models.models import (
-    DimUsers, DimArtists, DimTracks, FactListeningHistory, EtlAudit
-)
-from app.services.spotify_service import SpotifyService
+from app.models.models import DimUsers, DimArtists, DimTracks, FactListeningHistory, EtlAudit
+from app.v1.services.spotify_client import SpotifyClient
 
 logger = logging.getLogger(__name__)
 
@@ -20,73 +20,92 @@ logger = logging.getLogger(__name__)
 class EtlService:
     """Orquestador del pipeline ETL."""
 
+    # ============ EXTRACT ============
+
     @staticmethod
-    def extract_user(access_token: str) -> Dict[str, Any]:
+    def extract_user(token: str) -> Dict[str, Any]:
         """
-        Extrae datos del usuario autenticado.
-        
-        Phase: EXTRACT_USER
+        Llama al endpoint /v1/me de Spotify y retorna la lista cruda.
+
+        Args:
+            token (str): Access token de Spotify (Bearer).
+
+        Returns:
+            Dict[str, Any]: Objeto usuario en formato JSON crudo de Spotify.
         """
         logger.info("Extrayendo datos del usuario...")
-        user = SpotifyService.get_current_user(access_token)
+        user = SpotifyClient.get_current_user(token)
         logger.info(f"Usuario extraído: {user['id']}")
         return user
 
     @staticmethod
-    def extract_top_artists(access_token: str) -> List[Dict[str, Any]]:
+    def extract_top_artists(token: str) -> List[Dict[str, Any]]:
         """
-        Extrae top 50 artistas del usuario.
-        
-        Phase: EXTRACT_ARTISTS
+        Llama al endpoint /v1/me/top/artists de Spotify y retorna la lista cruda.
+
+        Args:
+            token (str): Access token de Spotify (Bearer).
+
+        Returns:
+            List[Dict[str, Any]]: Lista de objetos artista en formato JSON crudo de Spotify.
         """
         logger.info("Extrayendo top artistas...")
-        response = SpotifyService.get_top_artists(access_token, limit=50)
-        artists = response.get("items", [])
+        response = SpotifyClient.get_top_artists(token, limit=50)
+        artists = (response or {}).get("items", [])
         logger.info(f"Artistas extraídos: {len(artists)}")
         return artists
 
     @staticmethod
-    def extract_top_tracks(access_token: str) -> List[Dict[str, Any]]:
+    def extract_top_tracks(token: str) -> List[Dict[str, Any]]:
         """
-        Extrae top 50 canciones del usuario.
-        
-        Phase: EXTRACT_TRACKS
+        Llama al endpoint /v1/me/top/tracks de Spotify y retorna la lista cruda.
+
+        Args:
+            token (str): Access token de Spotify (Bearer).
+
+        Returns:
+            List[Dict[str, Any]]: Lista de objetos canción en formato JSON crudo de Spotify.
         """
         logger.info("Extrayendo top canciones...")
-        response = SpotifyService.get_top_tracks(access_token, limit=50)
-        tracks = response.get("items", [])
+        response = SpotifyClient.get_top_tracks(token, limit=50)
+        tracks = (response or {}).get("items", [])
         logger.info(f"Canciones extraídas: {len(tracks)}")
         return tracks
 
     @staticmethod
-    def extract_recently_played(
-        access_token: str,
-        cursor_next_ms: Optional[str] = None,
-    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    def extract_recently_played(token: str, after: Optional[str] = None) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """
-        Extrae historial de reproducción reciente.
-        
-        Phase: EXTRACT_HISTORY
-        Usa cursor_next_ms para carga incremental.
+        Llama al endpoint /v1/me/player/recently-played de Spotify y retorna la lista cruda.
+
+        Args:
+            token (str): Access token de Spotify (Bearer).
+            after (str): Timestamp en ms para paginación hacia atrás.
+
+        Returns:
+            Tuple[List[Dict[str, Any]], Optional[str]]: (items, cursor_next).
         """
         logger.info("Extrayendo historial de reproducción...")
-        response = SpotifyService.get_recently_played(access_token, limit=50, before=cursor_next_ms)
-        items = response.get("items", [])
-        next_cursor = response.get("cursors", {}).get("before")
+        response = SpotifyClient.get_recently_played(token, limit=50, after=after)
+        # Spotify puede devolver None al llegar al final del historial
+        items = (response or {}).get("items", [])
+        next_cursor = (response or {}).get("cursors", {}).get("after")
         logger.info(f"Historial extraído: {len(items)} items, next_cursor: {next_cursor}")
         return items, next_cursor
+
+    # ============ TRANSFORM ============
 
     @staticmethod
     def transform_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Transforma datos del usuario para cargar en dim_users.
-        
-        Phase: TRANSFORM_USER
+        Normaliza datos del usuario para cargar en dwh.dim_users.
+
+        Args:
+            user_data (Dict[str, Any]): Objeto usuario crudo de Spotify.
+
+        Returns:
+            Dict[str, Any]: Objeto normalizado para dim_users.
         """
         logger.info("Transformando datos del usuario...")
-        images = user_data.get("images", [])
-        images_url = images[0]["url"] if images else None
-        
         transformed = {
             "spotify_id": user_data["id"],
             "display_name": user_data.get("display_name"),
@@ -94,7 +113,6 @@ class EtlService:
             "country": user_data.get("country"),
             "followers": user_data.get("followers", {}).get("total", 0),
             "product": user_data.get("product", "free"),
-            "images_url": images_url,
         }
         logger.info(f"Usuario transformado: {transformed['spotify_id']}")
         return transformed
@@ -102,22 +120,23 @@ class EtlService:
     @staticmethod
     def transform_artists(artists_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Transforma artistas para cargar en dim_artists.
-        
-        Phase: TRANSFORM_ARTISTS
+        Normaliza artistas para cargar en dwh.dim_artists.
+
+        Args:
+            artists_data (List[Dict[str, Any]]): Lista de artistas crudos de Spotify.
+
+        Returns:
+            List[Dict[str, Any]]: Lista de artistas normalizados.
         """
         logger.info(f"Transformando {len(artists_data)} artistas...")
         transformed = []
         for artist in artists_data:
-            images = artist.get("images", [])
-            images_url = images[0]["url"] if images else None
-            
             transformed.append({
                 "spotify_id": artist["id"],
                 "name": artist["name"],
-                "genres": json.dumps(artist.get("genres", [])),
                 "popularity": artist.get("popularity"),
-                "images_url": images_url,
+                "followers_count": artist.get("followers", {}).get("total"),
+                "genres": artist.get("genres", []),
             })
         logger.info(f"Artistas transformados: {len(transformed)}")
         return transformed
@@ -125,24 +144,25 @@ class EtlService:
     @staticmethod
     def transform_tracks(tracks_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Transforma canciones para cargar en dim_tracks.
-        
-        Phase: TRANSFORM_TRACKS
+        Normaliza canciones para cargar en dwh.dim_tracks.
+
+        Args:
+            tracks_data (List[Dict[str, Any]]): Lista de canciones crudas de Spotify.
+
+        Returns:
+            List[Dict[str, Any]]: Lista de canciones normalizadas.
         """
         logger.info(f"Transformando {len(tracks_data)} canciones...")
         transformed = []
         for track in tracks_data:
             album = track.get("album", {})
-            images = album.get("images", [])
-            album_image_url = images[0]["url"] if images else None
-            
             transformed.append({
                 "spotify_id": track["id"],
                 "name": track["name"],
                 "spotify_artist_id": track["artists"][0]["id"] if track.get("artists") else None,
                 "album_name": album.get("name"),
-                "album_image_url": album_image_url,
                 "duration_ms": track.get("duration_ms"),
+                "popularity": track.get("popularity"),
                 "explicit": track.get("explicit", False),
             })
         logger.info(f"Canciones transformadas: {len(transformed)}")
@@ -151,170 +171,199 @@ class EtlService:
     @staticmethod
     def transform_history(history_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Transforma historial de reproducción para cargar en fact_listening_history.
-        
-        Phase: TRANSFORM_HISTORY
+        Normaliza historial para cargar en dwh.fact_listening_history.
+
+        Args:
+            history_data (List[Dict[str, Any]]): Lista de items del historial crudo de Spotify.
+
+        Returns:
+            List[Dict[str, Any]]: Lista de items normalizados.
         """
         logger.info(f"Transformando {len(history_data)} registros de historial...")
         transformed = []
         for item in history_data:
             track = item.get("track", {})
             context = item.get("context", {})
-            
-            # Manejo de context_type nulo
-            context_type = context.get("type") if context else "unknown"
-            context_name = context.get("external_urls", {}).get("spotify", "").split("/")[-1] if context else None
-            
-            # Reemplazar Z por +00:00 para parsear correctamente ISO 8601
+
+            # Parsear played_at
             played_at_str = item.get("played_at", "").replace("Z", "+00:00")
-            
+            played_at = datetime.fromisoformat(played_at_str)
+
             transformed.append({
                 "spotify_track_id": track.get("id"),
                 "spotify_artist_id": track.get("artists", [{}])[0].get("id"),
-                "played_at": played_at_str,
-                "context_type": context_type,
-                "context_name": context_name,
+                "played_at": played_at,
+                "hour_of_day": played_at.hour,
+                "day_of_week": played_at.strftime("%A"),
+                "context_type": context.get("type") if context else "unknown",
             })
         logger.info(f"Historial transformado: {len(transformed)}")
         return transformed
 
+    # ============ LOAD ============
+
     @staticmethod
-    def load_user(db: Session, user_data: Dict[str, Any], access_token: str, refresh_token: Optional[str]) -> int:
+    def load_user(db: Session, user_data: Dict[str, Any], access_token: str, refresh_token: Optional[str]) -> str:
         """
-        Carga usuario en dim_users (upsert).
-        
-        Phase: LOAD_USER
-        Retorna user_id interno.
+        Carga usuario en dwh.dim_users (upsert).
+
+        Args:
+            db (Session): Sesión de BD.
+            user_data (Dict[str, Any]): Datos transformados del usuario.
+            access_token (str): Access token de Spotify.
+            refresh_token (Optional[str]): Refresh token de Spotify.
+
+        Returns:
+            str: spotify_id del usuario cargado.
         """
         logger.info(f"Cargando usuario {user_data['spotify_id']}...")
-        
+
         user = db.query(DimUsers).filter_by(spotify_id=user_data["spotify_id"]).first()
-        
+
         if user:
-            # Update
             for key, value in user_data.items():
                 setattr(user, key, value)
             user.spotify_access_token = access_token
             if refresh_token:
                 user.spotify_refresh_token = refresh_token
-            user.token_expires_at = datetime.utcnow()  # Simplificado; en producción calcular con exp
         else:
-            # Insert
             user = DimUsers(
                 **user_data,
                 spotify_access_token=access_token,
                 spotify_refresh_token=refresh_token,
-                token_expires_at=datetime.utcnow(),
             )
             db.add(user)
-        
+
         db.commit()
-        logger.info(f"Usuario cargado: user_id={user.user_id}")
-        return user.user_id
+        logger.info(f"Usuario cargado: {user.spotify_id}")
+        return user.spotify_id
 
     @staticmethod
-    def load_artists(db: Session, artists_data: List[Dict[str, Any]]) -> int:
+    def load_artists(db: Session, artists_data: List[Dict[str, Any]]) -> Tuple[int, int]:
         """
-        Carga artistas en dim_artists (upsert con ON CONFLICT DO NOTHING).
-        
-        Phase: LOAD_ARTISTS
-        Retorna cantidad de artistas cargados.
+        Carga artistas en dwh.dim_artists (upsert).
+
+        Args:
+            db (Session): Sesión de BD.
+            artists_data (List[Dict[str, Any]]): Datos transformados de artistas.
+
+        Returns:
+            Tuple[int, int]: (nuevos, saltados).
         """
         logger.info(f"Cargando {len(artists_data)} artistas...")
-        loaded = 0
-        
+        new_count = 0
+        skipped_count = 0
+
         for artist in artists_data:
             existing = db.query(DimArtists).filter_by(spotify_id=artist["spotify_id"]).first()
             if not existing:
                 db.add(DimArtists(**artist))
-                loaded += 1
-        
+                new_count += 1
+            else:
+                skipped_count += 1
+
         db.commit()
-        logger.info(f"Artistas cargados: {loaded}")
-        return loaded
+        logger.info(f"Artistas cargados: {new_count} nuevos, {skipped_count} saltados")
+        return new_count, skipped_count
 
     @staticmethod
-    def load_tracks(db: Session, tracks_data: List[Dict[str, Any]]) -> int:
+    def load_tracks(db: Session, tracks_data: List[Dict[str, Any]]) -> Tuple[int, int]:
         """
-        Carga canciones en dim_tracks (upsert).
-        Requiere lookup de artist_id interno desde spotify_artist_id.
-        
-        Phase: LOAD_TRACKS
-        Retorna cantidad de canciones cargadas.
+        Carga canciones en dwh.dim_tracks (upsert).
+
+        Args:
+            db (Session): Sesión de BD.
+            tracks_data (List[Dict[str, Any]]): Datos transformados de canciones.
+
+        Returns:
+            Tuple[int, int]: (nuevos, saltados).
         """
         logger.info(f"Cargando {len(tracks_data)} canciones...")
-        loaded = 0
-        
+        new_count = 0
+        skipped_count = 0
+
         for track in tracks_data:
             existing = db.query(DimTracks).filter_by(spotify_id=track["spotify_id"]).first()
             if not existing:
-                # Lookup artist_id interno
                 artist = db.query(DimArtists).filter_by(
                     spotify_id=track["spotify_artist_id"]
                 ).first()
-                
+
                 if not artist:
                     logger.warning(f"Artista no encontrado para track {track['spotify_id']}")
                     continue
-                
+
                 track["artist_id"] = artist.artist_id
                 del track["spotify_artist_id"]
-                
+
                 db.add(DimTracks(**track))
-                loaded += 1
-        
+                new_count += 1
+            else:
+                skipped_count += 1
+
         db.commit()
-        logger.info(f"Canciones cargadas: {loaded}")
-        return loaded
+        logger.info(f"Canciones cargadas: {new_count} nuevas, {skipped_count} saltadas")
+        return new_count, skipped_count
 
     @staticmethod
-    def load_history(db: Session, user_id: int, history_data: List[Dict[str, Any]]) -> int:
+    def load_history(db: Session, spotify_user_id: str, history_data: List[Dict[str, Any]]) -> Tuple[int, int]:
         """
-        Carga historial en fact_listening_history (upsert).
-        Requiere lookups de track_id y artist_id internos.
-        
-        Phase: LOAD_HISTORY
-        Retorna cantidad de registros cargados.
+        Carga historial en dwh.fact_listening_history (upsert).
+
+        Args:
+            db (Session): Sesión de BD.
+            spotify_user_id (str): ID de Spotify del usuario.
+            history_data (List[Dict[str, Any]]): Datos transformados del historial.
+
+        Returns:
+            Tuple[int, int]: (nuevos, saltados).
         """
         logger.info(f"Cargando {len(history_data)} registros de historial...")
-        loaded = 0
-        
+        new_count = 0
+        skipped_count = 0
+
+        user = db.query(DimUsers).filter_by(spotify_id=spotify_user_id).first()
+        if not user:
+            logger.error(f"Usuario no encontrado: {spotify_user_id}")
+            return 0, 0
+
         for item in history_data:
-            # Lookup track_id y artist_id internos
             track = db.query(DimTracks).filter_by(
                 spotify_id=item["spotify_track_id"]
             ).first()
-            
+
             if not track:
                 logger.warning(f"Track no encontrado: {item['spotify_track_id']}")
                 continue
-            
+
             artist = db.query(DimArtists).filter_by(
                 spotify_id=item["spotify_artist_id"]
             ).first()
-            
+
             if not artist:
                 logger.warning(f"Artista no encontrado: {item['spotify_artist_id']}")
                 continue
-            
-            # Verificar si ya existe
+
             existing = db.query(FactListeningHistory).filter_by(
-                user_id=user_id,
+                user_id=user.user_id,
                 track_id=track.track_id,
                 played_at=item["played_at"],
             ).first()
-            
+
             if not existing:
                 db.add(FactListeningHistory(
-                    user_id=user_id,
+                    user_id=user.user_id,
                     track_id=track.track_id,
                     artist_id=artist.artist_id,
                     played_at=item["played_at"],
+                    hour_of_day=item.get("hour_of_day"),
+                    day_of_week=item.get("day_of_week"),
                     context_type=item.get("context_type"),
-                    context_name=item.get("context_name"),
                 ))
-                loaded += 1
-        
+                new_count += 1
+            else:
+                skipped_count += 1
+
         db.commit()
-        logger.info(f"Registros de historial cargados: {loaded}")
-        return loaded
+        logger.info(f"Historial cargado: {new_count} nuevos, {skipped_count} saltados")
+        return new_count, skipped_count

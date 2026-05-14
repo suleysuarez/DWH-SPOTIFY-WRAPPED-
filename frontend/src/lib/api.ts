@@ -10,7 +10,8 @@
 
 import { getToken, logout } from "./auth";
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:8000";
+// Usar 127.0.0.1 explícitamente para que coincida con el CORS del backend
+const BASE_URL = (import.meta.env.VITE_API_URL as string) || "http://127.0.0.1:8000";
 
 export class ApiError extends Error {
   constructor(

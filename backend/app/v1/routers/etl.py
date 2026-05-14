@@ -206,7 +206,7 @@ def get_etl_status(
     runs = [
         {
             "id": audit.audit_id,
-            "started_at": audit.started_at.isoformat(),
+            "started_at": audit.started_at.isoformat() + "+00:00",
             "duration_seconds": audit.duration_ms // 1000 if audit.duration_ms else None,
             "records_extracted": audit.artists_new + audit.tracks_new + audit.history_new,
             "records_loaded": audit.artists_new + audit.tracks_new + audit.history_new,
@@ -219,3 +219,4 @@ def get_etl_status(
         "tables": tables,
         "recent_runs": runs,
     }
+

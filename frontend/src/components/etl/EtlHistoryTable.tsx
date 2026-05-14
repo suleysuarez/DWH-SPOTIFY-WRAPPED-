@@ -1,5 +1,5 @@
 /**
- * EtlHistoryTable — shows recent ETL runs with duration, status, and metrics.
+ * EtlHistoryTable – shows recent ETL runs with duration, status, and metrics.
  */
 
 import type { EtlRun } from "@/types/etl";
@@ -21,11 +21,12 @@ export default function EtlHistoryTable({ runs, loading }: EtlHistoryTableProps)
   const formatDate = (date: string | null) => {
     if (!date) return "—";
     try {
-      return new Date(date).toLocaleString("es-UY", {
+      return new Date(date).toLocaleString("es-CO", {
         day: "2-digit",
         month: "short",
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "America/Bogota",
       });
     } catch {
       return "—";

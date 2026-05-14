@@ -5,7 +5,6 @@ date: 2026-05-12
 version: 1.0
 description: Rutas de artistas. Endpoint: GET /v1/artists/top.
 """
-
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -25,7 +24,6 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> DimUsers:
-    """Valida JWT y retorna usuario actual."""
     try:
         payload = AuthService.verify_jwt_token(credentials.credentials)
         spotify_id: str = payload.get("sub")
@@ -33,11 +31,9 @@ async def get_current_user(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    
     user = db.query(DimUsers).filter_by(spotify_id=spotify_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    
     return user
 
 
@@ -46,17 +42,9 @@ def get_top_artists(
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Obtiene top 5 artistas del usuario.
-
-    Basado en conteo de reproducciones en dwh.fact_listening_history.
-
-    Returns:
-        ArtistsResponse: Lista de top artistas.
-    """
     logger.info(f"Obteniendo top artistas para {current_user.spotify_id}")
-    
-    top_artists = db.query(
+
+    rows = db.query(
         DimArtists,
         func.count(FactListeningHistory.id).label("play_count")
     ).join(
@@ -68,7 +56,19 @@ def get_top_artists(
         DimArtists.artist_id
     ).order_by(
         desc("play_count")
-    ).limit(5).all()
-    
-    artists = [ArtistResponse.from_orm(artist[0]) for artist in top_artists]
-    return ArtistsResponse(items=artists)
+    ).limit(10).all()
+
+    artists = []
+    for rank, (artist, play_count) in enumerate(rows, start=1):
+        artist.play_count = play_count
+        artist.rank = rank
+        artists.append(ArtistResponse.model_validate(artist))
+
+    if not artists:
+        top = db.query(DimArtists).order_by(desc(DimArtists.popularity)).limit(10).all()
+        for rank, artist in enumerate(top, start=1):
+            artist.play_count = 0
+            artist.rank = rank
+            artists.append(ArtistResponse.model_validate(artist))
+
+    return ArtistsResponse(artists=artists, total=len(artists))

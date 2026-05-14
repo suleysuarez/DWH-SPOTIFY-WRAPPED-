@@ -10,11 +10,13 @@
 import { Music2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const BACKEND_LOGIN_URL = "http://localhost:8000/v1/auth/login";
+const BACKEND_LOGIN_URL = "http://127.0.0.1:8000/v1/auth/login";
 
 export default function Login() {
-  const handleConnect = () => {
-    window.location.href = BACKEND_LOGIN_URL;
+  const handleConnect = async () => {
+    const res = await fetch(BACKEND_LOGIN_URL);
+    const data = await res.json();
+    window.location.href = data.authorization_url;
   };
 
   return (

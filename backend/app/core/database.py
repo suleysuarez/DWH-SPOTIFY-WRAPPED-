@@ -7,13 +7,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.config import settings
 
-# Engine con pool_size reducido para Neon (plan gratuito)
+# Pool ampliado para soportar los ~5 requests simultáneos del dashboard
+# Neon free tier permite hasta 10 conexiones concurrentes
 engine = create_engine(
     settings.DATABASE_URL,
     echo=False,
-    pool_size=2,
-    max_overflow=3,
+    pool_size=5,
+    max_overflow=5,
+    pool_timeout=30,
     pool_pre_ping=True,  # Verifica conexiones antes de usarlas
+    pool_recycle=300,    # Recicla conexiones cada 5 minutos
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

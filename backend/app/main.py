@@ -18,7 +18,10 @@ logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 # Crear tablas (en desarrollo; en producción usar Alembic)
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    logger.warning(f"No se pudo crear tablas al iniciar: {e}")
 
 # Crear aplicación
 app = FastAPI(
@@ -55,3 +58,4 @@ def health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
