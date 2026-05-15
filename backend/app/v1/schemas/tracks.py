@@ -1,4 +1,4 @@
-"""
+﻿"""
 filename: tracks.py
 author: Suley & Jhonatan
 date: 2026-05-12
@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 class TrackResponse(BaseModel):
     """
-    Response de canción.
+    Response de canciÃ³n.
     Shape compatible con el tipo Track del frontend:
       { id, name, artist_name, album_name, duration_ms, popularity,
         preview_url, external_urls, album_image, play_count, rank }
@@ -37,7 +37,7 @@ class TrackResponse(BaseModel):
         """Mapea los campos del ORM al shape que espera el frontend."""
         if hasattr(data, "spotify_id"):
             spotify_id = getattr(data, "spotify_id", None)
-            # artist_name viene adjunto dinámicamente desde el router
+            # artist_name viene adjunto dinÃ¡micamente desde el router
             artist_name = getattr(data, "artist_name", "")
             return {
                 "id": spotify_id,
@@ -50,7 +50,7 @@ class TrackResponse(BaseModel):
                 "external_urls": {
                     "spotify": f"https://open.spotify.com/track/{spotify_id}"
                 } if spotify_id else {},
-                "album_image": None,
+                "album_image": getattr(data, "album_image_url", None),
                 "play_count": getattr(data, "play_count", None),
                 "rank": getattr(data, "rank", None),
             }
@@ -58,6 +58,6 @@ class TrackResponse(BaseModel):
 
 
 class TracksResponse(BaseModel):
-    """Response de GET /v1/tracks/top — compatible con TopTracksResponse del frontend."""
+    """Response de GET /v1/tracks/top â€” compatible con TopTracksResponse del frontend."""
     tracks: List[TrackResponse]
     total: int

@@ -1,4 +1,4 @@
-"""
+﻿"""
 filename: etl_service.py
 author: Suley & Jhonatan
 date: 2026-05-12
@@ -109,6 +109,7 @@ class EtlService:
                 "duration_ms": track.get("duration_ms"),
                 "popularity": track.get("popularity"),
                 "explicit": track.get("explicit", False),
+                "album_image_url": album.get("images", [{}])[0].get("url") if album.get("images") else None,
             })
         logger.info(f"Canciones transformadas: {len(transformed)}")
         return transformed

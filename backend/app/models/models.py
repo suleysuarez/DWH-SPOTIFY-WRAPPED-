@@ -1,4 +1,4 @@
-"""
+﻿"""
 filename: models.py
 author: Suley & Jhonatan
 date: 2026-05-12
@@ -55,6 +55,7 @@ class DimTracks(Base):
     name = Column(String(255), nullable=False)
     artist_id = Column(Integer, ForeignKey("dwh.dim_artists.artist_id"), nullable=False)
     album_name = Column(String(255), nullable=True)
+    album_image_url = Column(Text, nullable=True)
     duration_ms = Column(Integer, nullable=True)
     popularity = Column(Integer, nullable=True)
     explicit = Column(Boolean, default=False)
