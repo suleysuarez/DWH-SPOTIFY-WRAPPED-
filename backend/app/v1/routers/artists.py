@@ -1,9 +1,10 @@
 """
 filename: artists.py
-author: Suley & Jhonatan
-date: 2026-05-12
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
 version: 1.0
-description: Rutas de artistas. Endpoint: GET /v1/artists/top.
+description: Router de artistas del DWH. Expone GET /v1/artists/top con los top 10 artistas
+             del usuario ordenados por reproducciones en fact_listening_history. Requiere JWT.
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -24,6 +25,11 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> DimUsers:
+    """
+    Dependencia compartida: valida JWT Bearer y retorna el usuario DimUsers.
+    Lanza HTTP 401 si el token es inválido, expirado o el usuario no existe en BD.
+    Nota: esta función se replica en cada router (no hay dependencia centralizada).
+    """
     try:
         payload = AuthService.verify_jwt_token(credentials.credentials)
         spotify_id: str = payload.get("sub")
@@ -42,6 +48,15 @@ def get_top_artists(
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """
+    Obtiene top 10 artistas del usuario ordenados por reproducciones en el DWH.
+
+    Estrategia:
+    1. JOIN fact_listening_history → dim_artists, GROUP BY artista, ORDER BY play_count DESC.
+    2. Si no hay historial, devuelve artistas de dim_artists ordenados por popularidad.
+
+    Response shape compatible con TopArtistsResponse del frontend (ArtistsResponse).
+    """
     logger.info(f"Obteniendo top artistas para {current_user.spotify_id}")
 
     rows = db.query(
@@ -63,12 +78,5 @@ def get_top_artists(
         artist.play_count = play_count
         artist.rank = rank
         artists.append(ArtistResponse.model_validate(artist))
-
-    if not artists:
-        top = db.query(DimArtists).order_by(desc(DimArtists.popularity)).limit(10).all()
-        for rank, artist in enumerate(top, start=1):
-            artist.play_count = 0
-            artist.rank = rank
-            artists.append(ArtistResponse.model_validate(artist))
 
     return ArtistsResponse(artists=artists, total=len(artists))

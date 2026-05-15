@@ -1,6 +1,20 @@
 /**
- * QuickStatsCards — KPI cards para el dashboard.
- * Muestra: artistas, canciones, reproducciones, minutos, cancion top.
+ * QuickStatsCards.tsx — Fila de tarjetas KPI del dashboard.
+ *
+ * Muestra 5 métricas en tarjetas glassmorphism de igual tamaño:
+ *   1. Artistas únicos escuchados (total_artists)
+ *   2. Canciones únicas escuchadas (total_tracks)
+ *   3. Reproducciones totales (total_plays)
+ *   4. Minutos reproducidos (total_minutes)
+ *   5. Canción más escuchada (top_track + top_track_artist + top_track_plays)
+ *
+ * Props:
+ *   stats   → QuickStats | null  (los campos vienen de GET /v1/history/stats)
+ *   loading → boolean            (muestra 5 SkeletonCards mientras carga)
+ *
+ * Nota: la interfaz QuickStats aquí tiene más campos que el tipo homónimo
+ * en types/history.ts (total_plays, total_minutes, top_track*). Esto es porque
+ * el backend (v1/routers/history.py /stats) retorna un dict plano extendido.
  */
 import { Skeleton } from "@/components/ui/SkeletonCard";
 import { Users, Music, Play, Clock, Star } from "lucide-react";
@@ -52,7 +66,7 @@ function StatCard({
       <div>
         <p
           className="text-xl font-black text-white truncate"
-          style={{ fontFamily: "Nunito, sans-serif" }}
+          style={{ fontFamily: "DM Sans, sans-serif" }}
         >
           {value}
         </p>

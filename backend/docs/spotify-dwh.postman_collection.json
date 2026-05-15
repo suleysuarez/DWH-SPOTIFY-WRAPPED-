@@ -1,0 +1,332 @@
+{
+  "info": {
+    "_postman_id": "spotify-dwh-collection-v1",
+    "name": "Mi Spotify Wrapped DWH",
+    "description": "Colección de endpoints del backend FastAPI para el DWH personal de Spotify.\n\n## Configuración inicial\n1. Ejecuta GET /v1/auth/login para obtener la URL de autorización de Spotify.\n2. Abre esa URL en el navegador, autoriza la aplicación.\n3. Spotify redirige al callback con el JWT en ?token=...\n4. Copia el token y pégalo en la variable de colección `token`.\n5. Todos los demás endpoints usarán ese token automáticamente.\n\n## Variables de colección\n- `base_url`: URL base del backend (default: http://127.0.0.1:8000)\n- `token`: JWT obtenido tras el login (pegar manualmente)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "<pegar_jwt_aqui>",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Root health check",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/",
+            "description": "Verifica que el servidor esté activo."
+          },
+          "response": []
+        },
+        {
+          "name": "Health endpoint",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health",
+            "description": "Health check detallado."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Flujo OAuth 2.0 PKCE con Spotify.",
+      "item": [
+        {
+          "name": "1. Iniciar login (obtener URL de Spotify)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/auth/login",
+            "description": "Retorna la URL de autorización de Spotify. Abre esa URL en el navegador para iniciar el flujo OAuth.\n\nNo requiere autenticación."
+          },
+          "response": [
+            {
+              "name": "Ejemplo de respuesta",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"authorization_url\": \"https://accounts.spotify.com/authorize?client_id=...\"}"
+            }
+          ]
+        },
+        {
+          "name": "2. Callback (automático - no invocar manualmente)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/auth/callback?code=AUTH_CODE&state=STATE",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "auth", "callback"],
+              "query": [
+                {"key": "code", "value": "AUTH_CODE"},
+                {"key": "state", "value": "STATE"}
+              ]
+            },
+            "description": "Spotify llama a este endpoint automáticamente tras el login. No invocar manualmente.\n\nRedirecciona al frontend con ?token=JWT."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "description": "Perfil del usuario autenticado.",
+      "item": [
+        {
+          "name": "GET /v1/profile/me",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/profile/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Retorna el perfil del usuario desde dwh.dim_users.\n\nRequiere JWT en header Authorization."
+          },
+          "response": [
+            {
+              "name": "Ejemplo de respuesta",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"spotify_id\": \"user123\",\n  \"display_name\": \"Juan Pérez\",\n  \"email\": \"juan@example.com\",\n  \"country\": \"CO\",\n  \"followers\": 42,\n  \"product\": \"premium\",\n  \"image_url\": \"https://i.scdn.co/image/...\",\n  \"user_id\": 1,\n  \"loaded_at\": \"2026-05-15T12:00:00\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Artists",
+      "description": "Top artistas del usuario desde el DWH.",
+      "item": [
+        {
+          "name": "GET /v1/artists/top",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/artists/top",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Top 10 artistas más escuchados ordenados por reproducciones en fact_listening_history.\n\nSi no hay historial, devuelve artistas ordenados por popularidad."
+          },
+          "response": [
+            {
+              "name": "Ejemplo de respuesta",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"artists\": [\n    {\n      \"id\": \"spotify_artist_id\",\n      \"name\": \"Karol G\",\n      \"popularity\": 92,\n      \"followers_count\": 35000000,\n      \"genres\": [\"reggaeton\", \"latin pop\"],\n      \"image_url\": \"https://i.scdn.co/image/...\",\n      \"play_count\": 48,\n      \"rank\": 1\n    }\n  ],\n  \"total\": 10\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tracks",
+      "description": "Top canciones del usuario desde el DWH.",
+      "item": [
+        {
+          "name": "GET /v1/tracks/top",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/tracks/top",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Top 10 canciones más escuchadas ordenadas por reproducciones.\n\nIncluye album_image, play_count y rank."
+          },
+          "response": [
+            {
+              "name": "Ejemplo de respuesta",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"tracks\": [\n    {\n      \"id\": \"spotify_track_id\",\n      \"name\": \"BICHOTA\",\n      \"artist_name\": \"Karol G\",\n      \"album_name\": \"KG0516\",\n      \"duration_ms\": 210000,\n      \"popularity\": 85,\n      \"album_image\": \"https://i.scdn.co/image/...\",\n      \"play_count\": 30,\n      \"rank\": 1\n    }\n  ],\n  \"total\": 10\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "History",
+      "description": "Historial de escucha y estadísticas analíticas.",
+      "item": [
+        {
+          "name": "GET /v1/history/recently-played",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/history/recently-played?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "history", "recently-played"],
+              "query": [{"key": "limit", "value": "50"}]
+            },
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "description": "Últimas N reproducciones del usuario desde fact_listening_history."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /v1/history/stats",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/history/stats",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "description": "Estadísticas rápidas: total de tracks únicos, artistas únicos, reproducciones, minutos y canción más escuchada."
+          },
+          "response": [
+            {
+              "name": "Ejemplo de respuesta",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"total_tracks\": 120,\n  \"total_artists\": 45,\n  \"total_plays\": 850,\n  \"total_minutes\": 3120.5,\n  \"last_sync\": \"2026-05-15T10:30:00+00:00\",\n  \"etl_status\": \"success\",\n  \"top_track\": \"BICHOTA\",\n  \"top_track_artist\": \"Karol G\",\n  \"top_track_plays\": 30\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/history/genres",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/history/genres",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "description": "Top 10 géneros musicales del usuario con conteo y porcentaje."
+          },
+          "response": [
+            {
+              "name": "Ejemplo de respuesta",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"genres\": [\n    {\"genre\": \"reggaeton\", \"count\": 320, \"percentage\": 38.2},\n    {\"genre\": \"latin pop\", \"count\": 180, \"percentage\": 21.5}\n  ],\n  \"total_plays\": 850\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/history/peak-hour",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/history/peak-hour",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "description": "Hora del día con mayor número de reproducciones."
+          },
+          "response": [
+            {
+              "name": "Ejemplo de respuesta",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"hour\": 21, \"play_count\": 95, \"label\": \"21:00 - 22:00\"}"
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/history/peak-hour/distribution",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/history/peak-hour/distribution",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "description": "Distribución de reproducciones por cada una de las 24 horas del día."
+          },
+          "response": [
+            {
+              "name": "Ejemplo de respuesta",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"hours\": [\n    {\"hour\": 0, \"play_count\": 5, \"label\": \"00:00\"},\n    {\"hour\": 1, \"play_count\": 2, \"label\": \"01:00\"}\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ETL",
+      "description": "Pipeline de extracción, transformación y carga de datos de Spotify.",
+      "item": [
+        {
+          "name": "POST /v1/etl/run",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/v1/etl/run",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "description": "Ejecuta el pipeline ETL completo (Extract → Transform → Load).\n\nUsa el access token almacenado en dim_users para llamar a la Spotify API.\nSincronización incremental: usa el cursor del último ETL exitoso."
+          },
+          "response": [
+            {
+              "name": "Ejecución exitosa",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"message\": \"ETL completado exitosamente\",\n  \"logs\": [\n    \"Extrayendo datos de Spotify...\",\n    \"Extraido: 50 artistas, 50 canciones, 48 historial\",\n    \"Transformando datos...\",\n    \"Datos transformados exitosamente\",\n    \"Cargando datos en DWH...\",\n    \"Cargado: 12 artistas nuevos, 8 canciones nuevas, 48 historial nuevo\"\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/etl/status",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/v1/etl/status",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "description": "Estado actual del DWH (conteo de registros por tabla) y las últimas 5 ejecuciones ETL."
+          },
+          "response": [
+            {
+              "name": "Ejemplo de respuesta",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"tables\": [\n    {\"table_name\": \"dim_artists\", \"record_count\": 87, \"status\": \"loaded\"},\n    {\"table_name\": \"dim_tracks\", \"record_count\": 124, \"status\": \"loaded\"},\n    {\"table_name\": \"fact_listening_history\", \"record_count\": 850, \"status\": \"loaded\"}\n  ],\n  \"recent_runs\": [\n    {\n      \"id\": 5,\n      \"started_at\": \"2026-05-15T10:30:00+00:00\",\n      \"duration_seconds\": 8,\n      \"records_extracted\": 68,\n      \"records_loaded\": 68,\n      \"status\": \"success\",\n      \"error_message\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/etl/history",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/etl/history?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "etl", "history"],
+              "query": [
+                {"key": "limit", "value": "20"},
+                {"key": "offset", "value": "0"},
+                {"key": "status", "value": "", "disabled": true}
+              ]
+            },
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "description": "Historial paginado de ejecuciones ETL.\n\nQuery params:\n- limit: registros por página (1-100, default 20)\n- offset: inicio de página (default 0)\n- status: filtro por estado (success | error | running)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

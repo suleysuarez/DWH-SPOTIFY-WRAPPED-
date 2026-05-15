@@ -1,9 +1,10 @@
 """
 filename: tracks.py
-author: Suley & Jhonatan
-date: 2026-05-12
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
 version: 1.0
-description: Rutas de canciones. Endpoint: GET /v1/tracks/top.
+description: Router de canciones del DWH. Expone GET /v1/tracks/top con los top 10 tracks
+             del usuario ordenados por reproducciones en fact_listening_history. Requiere JWT.
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -24,7 +25,19 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> DimUsers:
-    """Valida JWT y retorna usuario actual."""
+    """
+    Dependencia FastAPI: valida el JWT Bearer y retorna el registro DimUsers.
+
+    Args:
+        credentials (HTTPAuthorizationCredentials): Token Bearer extraído del header Authorization.
+        db (Session): Sesión de SQLAlchemy inyectada por get_db.
+
+    Returns:
+        DimUsers: Instancia ORM del usuario autenticado.
+
+    Raises:
+        HTTPException: 401 si el token es inválido, expirado o el usuario no existe en BD.
+    """
     try:
         payload = AuthService.verify_jwt_token(credentials.credentials)
         spotify_id: str = payload.get("sub")
@@ -44,8 +57,18 @@ def get_top_tracks(
     db: Session = Depends(get_db),
 ):
     """
-    Obtiene top 10 canciones del usuario ordenadas por reproducciones.
-    Retorna shape compatible con TopTracksResponse del frontend.
+    Obtiene top 10 canciones del usuario ordenadas por reproducciones en el DWH.
+
+    Estrategia:
+    1. JOIN fact_listening_history → dim_tracks → dim_artists, GROUP BY track, ORDER BY play_count DESC.
+    2. Si no hay historial, devuelve canciones de dim_tracks ordenadas por popularidad.
+
+    Args:
+        current_user (DimUsers): Usuario autenticado via JWT (inyectado por get_current_user).
+        db (Session): Sesión de SQLAlchemy.
+
+    Returns:
+        TracksResponse: Lista de hasta 10 canciones con play_count y rank, shape compatible con el frontend.
     """
     logger.info(f"Obteniendo top canciones para {current_user.spotify_id}")
 
@@ -73,17 +96,5 @@ def get_top_tracks(
         track.play_count = play_count
         track.rank = rank
         tracks.append(TrackResponse.model_validate(track))
-
-    # Si no hay historial, devolver top tracks por popularidad
-    if not tracks:
-        top = db.query(DimTracks, DimArtists.name.label("artist_name")).join(
-            DimArtists, DimArtists.artist_id == DimTracks.artist_id
-        ).order_by(desc(DimTracks.popularity)).limit(10).all()
-
-        for rank, (track, artist_name) in enumerate(top, start=1):
-            track.artist_name = artist_name
-            track.play_count = 0
-            track.rank = rank
-            tracks.append(TrackResponse.model_validate(track))
 
     return TracksResponse(tracks=tracks, total=len(tracks))

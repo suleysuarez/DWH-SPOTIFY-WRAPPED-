@@ -1,9 +1,10 @@
 """
 filename: profile.py
-author: Suley & Jhonatan
-date: 2026-05-12
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
 version: 1.0
-description: Rutas de perfil. Endpoint: GET /v1/profile/me.
+description: Router de perfil de usuario. Expone GET /v1/profile/me que retorna los datos
+             del usuario desde dwh.dim_users sin llamar a Spotify en tiempo real. Requiere JWT.
 """
 
 import logging
@@ -24,7 +25,19 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> DimUsers:
-    """Valida JWT y retorna usuario actual."""
+    """
+    Dependencia FastAPI: valida el JWT Bearer y retorna el registro DimUsers.
+
+    Args:
+        credentials (HTTPAuthorizationCredentials): Token Bearer extraído del header Authorization.
+        db (Session): Sesión de SQLAlchemy inyectada por get_db.
+
+    Returns:
+        DimUsers: Instancia ORM del usuario autenticado.
+
+    Raises:
+        HTTPException: 401 si el token es inválido, expirado o el usuario no existe en BD.
+    """
     try:
         payload = AuthService.verify_jwt_token(credentials.credentials)
         spotify_id: str = payload.get("sub")
@@ -43,10 +56,14 @@ async def get_current_user(
 @router.get("/me", response_model=ProfileResponse)
 def get_profile(current_user: DimUsers = Depends(get_current_user)):
     """
-    Obtiene perfil del usuario autenticado.
+    Retorna los datos de perfil del usuario autenticado desde el DWH (sin llamar a Spotify en tiempo real).
+
+    Args:
+        current_user (DimUsers): Usuario autenticado via JWT (inyectado por get_current_user).
 
     Returns:
-        ProfileResponse: Datos del usuario desde dwh.dim_users.
+        ProfileResponse: Datos del usuario persistidos en dwh.dim_users
+                         (spotify_id, display_name, email, country, followers, product, image_url).
     """
     logger.info(f"Obteniendo perfil para {current_user.spotify_id}")
-    return ProfileResponse.from_orm(current_user)
+    return ProfileResponse.model_validate(current_user)

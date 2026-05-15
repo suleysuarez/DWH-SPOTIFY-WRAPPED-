@@ -1,7 +1,15 @@
 /**
- * ETL Page — monitor and execute ETL processes.
- * Sections: DWH Status, ETL History, Run ETL
- * API: GET /v1/etl/status, POST /v1/etl/run
+ * Etl.tsx — Página de monitoreo y ejecución del pipeline ETL.
+ *
+ * Carga el estado del DWH al montar (GET /v1/etl/status) y refresca
+ * automáticamente 1.5s después de que RunEtlPanel complete una ejecución.
+ *
+ * Layout: grid 3 columnas lg
+ *   col 1-2: DwhStatusTable + EtlHistoryTable (izquierda)
+ *   col 3:   RunEtlPanel (derecha)
+ *
+ * EtlHistoryTable gestiona su propia carga (GET /v1/etl/history) de forma
+ * independiente con paginación y filtro por status.
  */
 import AppLayout from "@/components/layout/AppLayout";
 import DwhStatusTable from "@/components/etl/DwhStatusTable";
@@ -25,7 +33,7 @@ export default function Etl() {
       <div className="mb-8">
         <h1
           className="text-3xl font-black text-white mb-1"
-          style={{ fontFamily: "Nunito, sans-serif" }}
+          style={{ fontFamily: "DM Sans, sans-serif" }}
         >
           ETL
         </h1>

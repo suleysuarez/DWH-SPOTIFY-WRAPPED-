@@ -1,22 +1,48 @@
-﻿"""
-filename: tracks.py
-author: Suley & Jhonatan
-date: 2026-05-12
-version: 1.0
-description: Schemas Pydantic para canciones.
 """
-
+filename: tracks.py
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
+version: 1.0
+description: Schemas Pydantic para el recurso canciones. TrackBase define los campos del DWH,
+             TrackRequest los campos de entrada, TrackResponse adapta el ORM al shape del
+             frontend (spotify_id → id, album_image_url → album_image) y TracksResponse pagina.
+"""
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, model_validator
 
 
+class TrackBase(BaseModel):
+    """Campos base de la canción tal como se almacenan en dwh.dim_tracks."""
+
+    spotify_id: str
+    name: str
+    album_name: Optional[str] = None
+    album_image_url: Optional[str] = None
+    duration_ms: Optional[int] = None
+    popularity: Optional[int] = None
+    explicit: bool = False
+
+
+class TrackRequest(TrackBase):
+    """
+    Request para registrar o actualizar una canción en el DWH.
+
+    Extiende TrackBase con el identificador del artista principal.
+    Utilizado internamente por el ETL; no hay endpoint público de escritura para tracks.
+    """
+
+    spotify_artist_id: str
+
+
 class TrackResponse(BaseModel):
     """
-    Response de canciÃ³n.
-    Shape compatible con el tipo Track del frontend:
+    Respuesta de canción.
+
+    Shape compatible con el tipo Track del frontend (types/track.ts):
       { id, name, artist_name, album_name, duration_ms, popularity,
         preview_url, external_urls, album_image, play_count, rank }
     """
+
     id: str
     name: str
     artist_name: str = ""
@@ -37,7 +63,6 @@ class TrackResponse(BaseModel):
         """Mapea los campos del ORM al shape que espera el frontend."""
         if hasattr(data, "spotify_id"):
             spotify_id = getattr(data, "spotify_id", None)
-            # artist_name viene adjunto dinÃ¡micamente desde el router
             artist_name = getattr(data, "artist_name", "")
             return {
                 "id": spotify_id,
@@ -58,6 +83,7 @@ class TrackResponse(BaseModel):
 
 
 class TracksResponse(BaseModel):
-    """Response de GET /v1/tracks/top â€” compatible con TopTracksResponse del frontend."""
+    """Response de GET /v1/tracks/top — compatible con TopTracksResponse del frontend."""
+
     tracks: List[TrackResponse]
     total: int

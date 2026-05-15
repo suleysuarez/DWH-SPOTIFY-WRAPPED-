@@ -1,9 +1,10 @@
 """
 filename: history.py
-author: Suley & Jhonatan
-date: 2026-05-12
-version: 1.1
-description: Rutas de historial. Endpoints: recently-played, stats, genres, peak-hour.
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
+version: 1.0
+description: Router de historial de escucha. Expone /recently-played, /stats, /genres,
+             /peak-hour y /peak-hour/distribution sobre fact_listening_history. Requiere JWT.
 """
 import logging
 from collections import Counter
@@ -25,7 +26,19 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> DimUsers:
-    """Valida JWT y retorna usuario actual."""
+    """
+    Dependencia FastAPI: valida el JWT Bearer y retorna el registro DimUsers.
+
+    Args:
+        credentials (HTTPAuthorizationCredentials): Token Bearer extraído del header Authorization.
+        db (Session): Sesión de SQLAlchemy inyectada por get_db.
+
+    Returns:
+        DimUsers: Instancia ORM del usuario autenticado.
+
+    Raises:
+        HTTPException: 401 si el token es inválido, expirado o el usuario no existe en BD.
+    """
     try:
         payload = AuthService.verify_jwt_token(credentials.credentials)
         spotify_id: str = payload.get("sub")
@@ -45,14 +58,24 @@ def get_recently_played(
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Obtiene historial de reproduccion reciente del usuario."""
+    """
+    Obtiene los últimos N registros de reproducción del usuario desde fact_listening_history.
+
+    Args:
+        limit (int): Número máximo de registros a retornar (default 50).
+        current_user (DimUsers): Usuario autenticado via JWT.
+        db (Session): Sesión de SQLAlchemy.
+
+    Returns:
+        HistoryResponse: Lista de items de historial con total, ordenados por played_at DESC.
+    """
     logger.info(f"Obteniendo historial reciente para {current_user.spotify_id}")
     history = db.query(FactListeningHistory).filter_by(
         user_id=current_user.user_id
     ).order_by(
         FactListeningHistory.played_at.desc()
     ).limit(limit).all()
-    items = [HistoryItemResponse.from_orm(h) for h in history]
+    items = [HistoryItemResponse.model_validate(h) for h in history]
     return HistoryResponse(items=items, total=len(items))
 
 
@@ -62,9 +85,15 @@ def get_history_stats(
     db: Session = Depends(get_db),
 ):
     """
-    Estadisticas rapidas del DWH.
-    Shape: { total_tracks, total_artists, last_sync, etl_status,
-             top_track, top_track_plays, total_minutes, total_plays }
+    Estadísticas rápidas del historial del usuario desde el DWH.
+
+    Args:
+        current_user (DimUsers): Usuario autenticado via JWT.
+        db (Session): Sesión de SQLAlchemy.
+
+    Returns:
+        dict: Contiene total_tracks, total_artists, total_plays, total_minutes,
+              last_sync (ISO 8601), etl_status, top_track, top_track_artist y top_track_plays.
     """
     logger.info(f"Obteniendo stats para {current_user.spotify_id}")
 
@@ -96,7 +125,7 @@ def get_history_stats(
     ).filter(
         FactListeningHistory.user_id == current_user.user_id
     ).group_by(
-        DimTracks.name, DimArtists.name
+        FactListeningHistory.track_id, DimTracks.name, DimArtists.name
     ).order_by(desc("play_count")).first()
 
     # Total de minutos reproducidos (usando duration_ms de dim_tracks)
@@ -128,8 +157,14 @@ def get_top_genres(
     db: Session = Depends(get_db),
 ):
     """
-    Top generos del usuario.
-    Shape: { genres: [{genre, count, percentage}], total_plays }
+    Calcula los top 10 géneros musicales del usuario contando apariciones en el historial.
+
+    Args:
+        current_user (DimUsers): Usuario autenticado via JWT.
+        db (Session): Sesión de SQLAlchemy.
+
+    Returns:
+        dict: { genres: [{genre, count, percentage}], total_plays } con hasta 10 géneros ordenados por frecuencia.
     """
     logger.info(f"Obteniendo generos para {current_user.spotify_id}")
 
@@ -172,8 +207,15 @@ def get_peak_hour(
     db: Session = Depends(get_db),
 ):
     """
-    Hora pico del usuario.
-    Shape: { hour, play_count, label }
+    Determina la hora del día con más reproducciones del usuario.
+
+    Args:
+        current_user (DimUsers): Usuario autenticado via JWT.
+        db (Session): Sesión de SQLAlchemy.
+
+    Returns:
+        dict: { hour (0-23), play_count, label (ej. "14:00 - 15:00") }
+              Si no hay datos, retorna hour=0 y play_count=0.
     """
     logger.info(f"Obteniendo peak-hour para {current_user.spotify_id}")
 
@@ -194,3 +236,32 @@ def get_peak_hour(
     label = f"{hour:02d}:00 - {end:02d}:00"
 
     return {"hour": hour, "play_count": play_count, "label": label}
+@router.get("/peak-hour/distribution")
+def get_hour_distribution(
+    current_user: DimUsers = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Distribución de reproducciones por cada hora del día (0-23).
+
+    Args:
+        current_user (DimUsers): Usuario autenticado via JWT.
+        db (Session): Sesión de SQLAlchemy.
+
+    Returns:
+        dict: { hours: [{hour, play_count, label}] } con 24 entradas (una por hora), play_count=0 si no hay datos.
+    """
+    rows = db.query(
+        FactListeningHistory.hour_of_day,
+        func.count(FactListeningHistory.id).label("play_count")
+    ).filter(
+        FactListeningHistory.user_id == current_user.user_id,
+        FactListeningHistory.hour_of_day.isnot(None)
+    ).group_by(FactListeningHistory.hour_of_day).all()
+
+    counts = {row[0]: row[1] for row in rows}
+    hours = [
+        {"hour": h, "play_count": counts.get(h, 0), "label": f"{h:02d}:00"}
+        for h in range(24)
+    ]
+    return {"hours": hours}
