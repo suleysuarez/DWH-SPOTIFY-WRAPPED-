@@ -1,9 +1,10 @@
 """
 filename: main.py
-author: Suley & Jhonatan
-date: 2026-05-12
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
 version: 1.0
-description: Aplicación FastAPI principal. Configuración de CORS, routers, logging.
+description: Punto de entrada de la aplicación FastAPI. Configura logging, CORS y tablas
+             del DWH en startup, y monta el router v1 con todos los endpoints bajo /v1.
 """
 
 import logging

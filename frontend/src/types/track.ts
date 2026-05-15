@@ -1,3 +1,11 @@
+/**
+ * track.ts — Tipos TypeScript para canciones del DWH.
+ *
+ * `Track` mapea la respuesta de GET /v1/tracks/top (schema TrackResponse del backend).
+ * `album_image` corresponde al campo `album_image_url` de dim_tracks en el DWH.
+ * `formatDuration(ms)` convierte milisegundos a "mm:ss" — usado en TopTracksCard.tsx.
+ */
+
 export interface Track {
   id: string;
   name: string;

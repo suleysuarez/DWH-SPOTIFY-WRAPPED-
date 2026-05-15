@@ -1,9 +1,10 @@
 """
 filename: auth.py
-author: Suley & Jhonatan
-date: 2026-05-12
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
 version: 1.0
-description: Schemas Pydantic para autenticación OAuth PKCE y JWT.
+description: Schemas Pydantic para el flujo OAuth PKCE. Define AuthLoginResponse,
+             AuthCallbackRequest y AuthCallbackResponse del módulo de autenticación.
 """
 
 from pydantic import BaseModel

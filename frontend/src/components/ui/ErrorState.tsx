@@ -1,5 +1,11 @@
 /**
- * ErrorState — shown when an API call fails.
+ * ErrorState — Estado de error para fallos en llamadas a la API.
+ *
+ * Props:
+ *   message → string    (default: "Error al cargar los datos.")
+ *   onRetry → () => void (opcional) — muestra botón "Reintentar" si se pasa
+ *
+ * Usado en todos los componentes del dashboard y ETL como fallback de error.
  */
 
 import { AlertCircle, RefreshCw } from "lucide-react";

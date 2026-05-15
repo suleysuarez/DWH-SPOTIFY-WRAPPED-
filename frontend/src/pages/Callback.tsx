@@ -1,9 +1,19 @@
 /**
- * Callback Page
- * - Reads JWT token from URL query params (?token=<jwt>)
- * - Saves token to localStorage as "app_token"
- * - Cleans URL and redirects to /dashboard
- * - Shows loading spinner during processing
+ * Callback.tsx — Página de callback OAuth post-autenticación.
+ *
+ * Recibe el JWT que el backend agrega como query param tras el OAuth de Spotify:
+ *   `/callback?token=<jwt>`
+ *
+ * Flujo al montar el componente:
+ * 1. Lee `?token` de la URL con URLSearchParams.
+ * 2. Llama a `saveToken(token)` → guarda en localStorage["app_token"].
+ * 3. Limpia la URL con `history.replaceState` para eliminar el token del historial.
+ * 4. Tras 800ms redirige a /dashboard (ProtectedRoute validará el token).
+ *
+ * Si no hay token en la URL, igual redirige a /dashboard y ProtectedRoute
+ * enviará al usuario a /login.
+ *
+ * Diseño: pantalla de carga con logo animado y spinner. Fondo #121212.
  */
 
 import { useEffect } from "react";

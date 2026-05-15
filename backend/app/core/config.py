@@ -1,12 +1,22 @@
 """
-Configuración centralizada del backend.
-Usa pydantic-settings para cargar variables de entorno con validación.
+filename: config.py
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
+version: 1.0
+description: Configuración centralizada del backend usando pydantic-settings. Lee y valida
+             variables de entorno desde backend/.env. Singleton `settings` compartido por
+             todos los módulos.
 """
 from typing import List
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    """Configuración de la aplicación desde variables de entorno."""
+    """
+    Configuración de la aplicación leída desde variables de entorno.
+
+    Todos los campos son obligatorios salvo los que tienen valor por defecto.
+    Ver `backend/.env` para los valores de desarrollo local.
+    """
     # Base de datos
     DATABASE_URL: str = "postgresql://user:password@localhost/dwh"
 

@@ -1,3 +1,14 @@
+/**
+ * const.ts — Re-exportaciones y constantes del frontend (legado Manus).
+ *
+ * Re-exporta COOKIE_NAME y ONE_YEAR_MS de shared/const.ts — constantes del portal Manus
+ * que no se usan en el flujo OAuth activo (el auth usa JWT en localStorage["app_token"]).
+ *
+ * getLoginUrl() construye la URL de un portal OAuth genérico (VITE_OAUTH_PORTAL_URL).
+ * ⚠️  Esta función NO se usa en el flujo activo. El login real redirige al backend
+ * FastAPI en /v1/auth/login, sin pasar por esta función.
+ */
+
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
 // Generate login URL at runtime so redirect URI reflects the current origin.

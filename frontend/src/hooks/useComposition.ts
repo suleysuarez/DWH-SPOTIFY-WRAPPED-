@@ -1,3 +1,13 @@
+/**
+ * useComposition — Hook para manejar IME (Input Method Editor) en inputs de texto.
+ *
+ * Evita que Enter/Escape se disparen durante composición IME (teclados chinos, japoneses,
+ * coreanos). Usa doble setTimeout en onCompositionEnd para compensar el bug de Safari
+ * donde compositionEnd se dispara antes que onKeyDown.
+ *
+ * Nota: Este es un hook de utilidad genérico, actualmente sin uso en este proyecto.
+ */
+
 import { useRef } from "react";
 import { usePersistFn } from "./usePersistFn";
 

@@ -1,3 +1,12 @@
+/**
+ * ThemeContext — Contexto de tema claro/oscuro para la aplicación.
+ *
+ * En este proyecto el tema está fijado a "dark" (App.tsx pasa defaultTheme="dark"
+ * y switchable=false), por lo que toggleTheme es undefined y no hay UI de cambio.
+ * El tema se aplica añadiendo/quitando la clase `dark` al elemento <html>.
+ * Si `switchable=true`, el tema elegido se persiste en localStorage["theme"].
+ */
+
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";

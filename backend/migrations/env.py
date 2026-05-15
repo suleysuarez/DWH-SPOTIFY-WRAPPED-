@@ -1,5 +1,20 @@
 """
-Alembic environment configuration.
+env.py — Configuración de entorno de Alembic.
+
+Este archivo es ejecutado por Alembic en cada comando (`alembic upgrade`,
+`alembic downgrade`, `alembic revision --autogenerate`, etc.).
+
+Responsabilidades:
+- Agrega la raíz del backend al sys.path para poder importar `app.*`.
+- Inyecta `settings.DATABASE_URL` como la URL de conexión (reemplaza el valor
+  en alembic.ini para evitar credenciales en el repositorio).
+- Expone `target_metadata = Base.metadata` para la detección automática de
+  cambios en los modelos ORM.
+- Define `run_migrations_offline()` y `run_migrations_online()` según el
+  patrón estándar de Alembic.
+
+Para crear el schema `dwh` antes de las migraciones, la primera migración
+(001_initial_schema.py) ejecuta `CREATE SCHEMA IF NOT EXISTS dwh`.
 """
 
 from logging.config import fileConfig

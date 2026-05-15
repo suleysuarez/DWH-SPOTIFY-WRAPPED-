@@ -1,3 +1,9 @@
+/**
+ * useMobile — Detecta si el viewport es móvil (< 768px).
+ * Usa MediaQueryList para actualizarse en tiempo real al redimensionar.
+ * El breakpoint 768px coincide con `md` de Tailwind CSS.
+ */
+
 import * as React from "react";
 
 const MOBILE_BREAKPOINT = 768;

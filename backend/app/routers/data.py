@@ -1,6 +1,17 @@
 """
-Rutas de datos: artists, tracks, history, profile.
-Todos los endpoints requieren JWT válido.
+data.py (LEGACY — app/routers/) — Rutas de datos: artists, tracks, history, profile.
+
+⚠️  ARCHIVO LEGACY: Este router NO está montado en la aplicación activa.
+    Los endpoints equivalentes activos están en app/v1/routers/ (artists.py,
+    tracks.py, history.py, profile.py).
+
+Diferencias con la versión activa (v1):
+- Autenticación via header Authorization (string) en lugar de HTTPBearer scheme.
+- `get_current_user` extrae user_id (int) del JWT; en v1 usa spotify_id (str).
+- Límite de top artistas/canciones es 5 (en v1 es 10).
+- El endpoint de géneros lee genres como JSON string (no ARRAY nativo).
+
+Se conserva como referencia histórica del diseño original.
 """
 
 import logging

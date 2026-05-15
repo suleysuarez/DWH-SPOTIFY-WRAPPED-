@@ -1,6 +1,11 @@
 """
-Rutas de autenticación OAuth PKCE.
-Endpoints: /v1/auth/login, /v1/auth/callback
+filename: auth.py
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
+version: 1.0
+description: Router de autenticación OAuth 2.0 PKCE con Spotify. GET /v1/auth/login genera
+             el par PKCE y retorna la URL de autorización. GET /v1/auth/callback intercambia
+             el code por tokens de Spotify, carga el usuario en el DWH y emite el JWT de la app.
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status

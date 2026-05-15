@@ -1,5 +1,13 @@
 /**
- * EmptyState — shown when the DWH has no data yet.
+ * EmptyState — Estado vacío cuando el DWH no tiene datos.
+ *
+ * Props:
+ *   title       → string  (default: "Tu DWH está vacío")
+ *   description → string  (default: guía al usuario a la página ETL)
+ *   showEtlLink → boolean (default: true) — muestra botón "Ir a ETL" con Link a /etl
+ *
+ * Usado en Dashboard.tsx cuando stats.total_tracks === 0 para indicar
+ * que el usuario debe ejecutar el ETL antes de ver analíticas.
  */
 
 import { Database, ArrowRight } from "lucide-react";
@@ -25,7 +33,7 @@ export default function EmptyState({
       >
         <Database className="w-7 h-7" style={{ color: "#1DB954" }} />
       </div>
-      <h3 className="text-lg font-bold text-white mb-2" style={{ fontFamily: "Nunito, sans-serif" }}>
+      <h3 className="text-lg font-bold text-white mb-2" style={{ fontFamily: "DM Sans, sans-serif" }}>
         {title}
       </h3>
       <p className="text-sm text-white/50 max-w-xs mb-6">{description}</p>

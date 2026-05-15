@@ -1,157 +1,160 @@
 # Mi Spotify Wrapped — Personal Data Warehouse
 
-Aplicación full-stack para sincronizar, analizar y visualizar tu historial de Spotify en un Data Warehouse personal.
+Aplicación full-stack para sincronizar, analizar y visualizar el historial de Spotify en un Data Warehouse personal.
 
-**Stack:**
-- **Frontend:** React 19 + TypeScript + Tailwind CSS 4 + Wouter (routing)
-- **Backend:** FastAPI + SQLAlchemy + PostgreSQL
-- **Auth:** OAuth 2.0 PKCE + JWT
-- **ETL:** Pipeline incremental con Spotify API
+**Proyecto académico — Universidad de Pamplona 2026-I**
+Autoras/es: Suley Suárez y Jhonatan Vera | Profesor: Juan Alejandro Carrillo Jaimes
+
+---
+
+## Stack
+
+| Capa | Tecnologías |
+|---|---|
+| Frontend | React 19 + TypeScript + Vite + Tailwind CSS 4 + Wouter |
+| Backend | FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL |
+| Auth | OAuth 2.0 PKCE (Spotify) + JWT HS256 (8h) |
+| ETL | Pipeline incremental: Extract → Transform → Load |
+| UI | Glassmorphism Premium Dark (#121212 + #1DB954) |
+
+---
+
+## Arquitectura General
+
+```
+┌─────────────────────┐        ┌──────────────────────────┐
+│  React (Wouter)     │ JWT    │  FastAPI (puerto 8000)   │
+│  puerto 3000        │◄──────►│  /v1/auth, /v1/artists,  │
+│                     │        │  /v1/tracks, /v1/history, │
+│  /dashboard         │        │  /v1/profile, /v1/etl     │
+│  /profile           │        └──────────┬───────────────┘
+│  /etl               │                   │ SQLAlchemy
+└─────────────────────┘                   ▼
+                                ┌──────────────────────┐
+          Spotify API           │  PostgreSQL (Neon)   │
+          ◄─────────────────────│  schema dwh:         │
+          OAuth PKCE + REST     │  dim_users           │
+                                │  dim_artists         │
+                                │  dim_tracks          │
+                                │  fact_listening_hist │
+                                │  etl_audit           │
+                                └──────────────────────┘
+```
+
+**Flujo OAuth:**
+1. Frontend → `GET /v1/auth/login` → recibe `authorization_url`
+2. Redirección a Spotify (el backend genera `code_verifier` y `code_challenge`)
+3. Spotify → `GET /v1/auth/callback?code=X&state=Y` → backend crea JWT
+4. Frontend en `/callback?token=JWT` guarda en `localStorage["app_token"]` → `/dashboard`
 
 ---
 
 ## Instalación Local
 
-### Requisitos Previos
+### Requisitos
 
-- Node.js 22+
+- Node.js 22+ y pnpm
 - Python 3.10+
-- PostgreSQL 14+ (o Neon cloud)
-- Cuenta de Spotify (gratuita o premium)
+- PostgreSQL 14+ (o cuenta en [Neon](https://neon.tech))
 - Aplicación registrada en [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
 
-### 1. Clonar el Repositorio
-
-```bash
-git clone <repo-url>
-cd mi-spotify-wrapped-dwh
-```
-
-### 2. Configurar Backend
-
-#### 2.1 Crear Entorno Virtual
+### 1. Configurar Backend
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-```
-
-#### 2.2 Instalar Dependencias
-
-```bash
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Linux/Mac
 pip install -r requirements.txt
 ```
 
-#### 2.3 Configurar Variables de Entorno
-
-Copiar `.env.example` a `.env` y llenar con tus valores:
-
-```bash
-cp .env.example .env
-```
-
-Editar `.env`:
+Crear `backend/.env`:
 
 ```env
-# PostgreSQL (Neon)
-DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
-
-# Spotify OAuth (obtener de https://developer.spotify.com/dashboard)
-SPOTIFY_CLIENT_ID=your_client_id
-SPOTIFY_CLIENT_SECRET=your_client_secret
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+SPOTIFY_CLIENT_ID=...
+SPOTIFY_CLIENT_SECRET=...
 SPOTIFY_REDIRECT_URI=http://localhost:8000/v1/auth/callback
-
-# JWT (generar con: python -c "import secrets; print(secrets.token_urlsafe(32))")
-JWT_SECRET=your_secret_key_here
-
-# Frontend
+JWT_SECRET=...           # python -c "import secrets; print(secrets.token_hex(32))"
 FRONTEND_URL=http://localhost:3000
+ALLOW_HOSTS=http://localhost:3000
 ```
 
-#### 2.4 Crear Base de Datos
-
-Si usas PostgreSQL local:
+Ejecutar migraciones e iniciar:
 
 ```bash
-createdb dwh
-```
-
-Si usas Neon, copiar la URL de conexión a `DATABASE_URL`.
-
-#### 2.5 Ejecutar Migraciones (Alembic)
-
-```bash
-cd backend
 alembic upgrade head
-```
-
-#### 2.6 Iniciar Backend
-
-```bash
-cd backend
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Backend disponible en: `http://localhost:8000`
-
-### 3. Configurar Frontend
-
-#### 3.1 Instalar Dependencias
+### 2. Configurar Frontend
 
 ```bash
-cd client
-npm install
+# Desde la raíz del proyecto
+pnpm install
 ```
 
-#### 3.2 Configurar Variables de Entorno
-
-El frontend usa variables de entorno inyectadas por Manus. Localmente, crear `.env.local`:
+Crear `frontend/.env.local` (o `.env`):
 
 ```env
 VITE_API_URL=http://localhost:8000
 ```
 
-#### 3.3 Iniciar Frontend
+Iniciar:
 
 ```bash
-npm run dev
+pnpm dev   # puerto 3000
 ```
-
-Frontend disponible en: `http://localhost:3000`
 
 ---
 
 ## Flujo de Uso
 
-### 1. Login con Spotify
+1. **Login:** Ir a `/login` → "Conectar con Spotify" → autorizar acceso → redirigido a `/dashboard`
+2. **ETL:** Ir a `/etl` → "Sincronizar Ahora" → esperar logs (~20-30s la primera vez)
+3. **Dashboard:** Ver top artistas/canciones, hora pico, géneros, estadísticas rápidas
+4. **Perfil:** Ver datos de la cuenta Spotify (avatar, email, país, seguidores)
 
-1. Abrir `http://localhost:3000/login`
-2. Hacer clic en "Conectar con Spotify"
-3. Autorizar acceso a tu historial de Spotify
-4. Serás redirigido a `/dashboard`
+---
 
-### 2. Ejecutar ETL
+## Endpoints API (bajo `/v1`)
 
-1. Ir a `/etl`
-2. Hacer clic en "Sincronizar Ahora"
-3. Esperar a que se carguen los datos (primero: ~20-30s)
-4. Ver logs en tiempo real en el panel terminal
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/auth/login` | No | URL de autorización OAuth |
+| GET | `/auth/callback` | No | Intercambia code por JWT |
+| GET | `/artists/top` | JWT | Top 10 artistas del DWH |
+| GET | `/tracks/top` | JWT | Top 10 canciones del DWH |
+| GET | `/history/peak-hour` | JWT | Hora pico de escucha |
+| GET | `/history/peak-hour/distribution` | JWT | Distribución por las 24 horas |
+| GET | `/history/genres` | JWT | Top géneros musicales |
+| GET | `/history/stats` | JWT | Stats rápidas (conteos, última sync) |
+| GET | `/history/recently-played` | JWT | Reproducciones recientes |
+| GET | `/profile/me` | JWT | Perfil del usuario (desde DWH) |
+| POST | `/etl/run` | JWT | Disparar pipeline ETL completo |
+| GET | `/etl/status` | JWT | Estado del DWH + auditoría |
+| GET | `/etl/history` | JWT | Historial paginado de ejecuciones |
 
-### 3. Explorar Dashboard
+---
 
-1. Ir a `/dashboard`
-2. Ver:
-   - Top 5 artistas
-   - Top 5 canciones
-   - Hora pico de escucha
-   - Géneros dominantes
-   - Estadísticas rápidas (total tracks, artistas, última sync)
+## Seguridad
 
-### 4. Ver Perfil
+- **JWT:** HS256, 8h de expiración, almacenado en `localStorage["app_token"]`
+- **PKCE:** `code_verifier` y `code_challenge` generados en el backend, PKCESessions en BD
+- **CORS:** Controlado con `ALLOW_HOSTS` (sin wildcard)
+- **Scopes Spotify:** `user-read-private user-read-email user-top-read user-read-recently-played`
 
-1. Ir a `/profile`
-2. Ver datos de tu cuenta Spotify (avatar, email, país, seguidores, plan)
+---
+
+## Troubleshooting
+
+**CORS error:** Verificar que `ALLOW_HOSTS` en `.env` coincida exactamente con el origen del frontend.
+
+**"No such table" en el backend:** Ejecutar `alembic upgrade head` y asegurarse que el schema `dwh` exista en PostgreSQL.
+
+**ETL falla:** Revisar logs en `/etl`. El access token de Spotify expira — hacer login nuevamente para obtener uno nuevo.
+
+**JWT expirado:** El token dura 8h. Hacer logout y volver a autenticarse con Spotify.
 
 ---
 
@@ -159,219 +162,30 @@ Frontend disponible en: `http://localhost:3000`
 
 ```
 mi-spotify-wrapped-dwh/
-├── backend/
+├── backend/              # FastAPI + SQLAlchemy + Alembic
 │   ├── app/
-│   │   ├── core/
-│   │   │   ├── config.py          # Configuración (BaseSettings)
-│   │   │   ├── database.py        # SQLAlchemy engine
-│   │   │   └── security.py        # JWT, PKCE, tokens
-│   │   ├── models/
-│   │   │   └── models.py          # Tablas SQLAlchemy (dim_*, fact_*, etl_audit, pkce_sessions)
-│   │   ├── schemas/
-│   │   │   └── schemas.py         # Pydantic models (Request/Response)
-│   │   ├── services/
-│   │   │   ├── spotify_service.py # Cliente Spotify API
-│   │   │   └── etl_service.py     # Pipeline ETL (extract, transform, load)
-│   │   ├── routers/
-│   │   │   ├── auth.py            # /v1/auth/login, /v1/auth/callback
-│   │   │   ├── data.py            # /v1/artists/top, /v1/tracks/top, /v1/history/*, /v1/profile/me
-│   │   │   └── etl.py             # /v1/etl/status, /v1/etl/run
-│   │   └── main.py                # FastAPI app
-│   ├── migrations/                # Alembic migrations
-│   ├── requirements.txt
-│   ├── .env.example
-│   └── alembic.ini
-├── client/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Login.tsx
-│   │   │   ├── Callback.tsx
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── Profile.tsx
-│   │   │   ├── Etl.tsx
-│   │   │   └── NotFound.tsx
-│   │   ├── components/
-│   │   │   ├── layout/
-│   │   │   │   ├── Navbar.tsx
-│   │   │   │   └── AppLayout.tsx
-│   │   │   ├── dashboard/
-│   │   │   │   ├── TopArtistsCard.tsx
-│   │   │   │   ├── TopTracksCard.tsx
-│   │   │   │   ├── PeakHourCard.tsx
-│   │   │   │   ├── GenresChart.tsx
-│   │   │   │   └── QuickStatsCards.tsx
-│   │   │   ├── etl/
-│   │   │   │   ├── DwhStatusTable.tsx
-│   │   │   │   ├── EtlHistoryTable.tsx
-│   │   │   │   └── RunEtlPanel.tsx
-│   │   │   └── ui/
-│   │   ├── lib/
-│   │   │   ├── api.ts             # Cliente API con JWT
-│   │   │   ├── auth.ts            # Funciones de autenticación
-│   │   │   └── utils.ts
-│   │   ├── hooks/
-│   │   │   └── useApi.ts          # Hook para llamadas a API
-│   │   ├── types/
-│   │   │   ├── user.ts
-│   │   │   ├── artist.ts
-│   │   │   ├── track.ts
-│   │   │   ├── history.ts
-│   │   │   └── etl.ts
-│   │   ├── router/
-│   │   │   └── ProtectedRoute.tsx # Rutas protegidas
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   └── index.css
-│   ├── package.json
-│   └── tsconfig.json
-└── README.md
+│   │   ├── core/         # config.py, database.py, security.py (legacy)
+│   │   ├── models/       # models.py — todos los ORM del schema dwh
+│   │   ├── v1/           # Código activo
+│   │   │   ├── routers/  # auth, artists, tracks, history, profile, etl
+│   │   │   ├── services/ # auth_service, spotify_client, etl_service
+│   │   │   └── schemas/  # Pydantic request/response
+│   │   ├── routers/      # ⚠️ LEGACY — no montado en main.py
+│   │   ├── schemas/      # ⚠️ LEGACY
+│   │   ├── services/     # ⚠️ LEGACY
+│   │   └── main.py
+│   └── migrations/       # Alembic versions
+├── frontend/             # React + Vite
+│   └── src/
+│       ├── pages/        # Login, Callback, Dashboard, Profile, Etl, NotFound
+│       ├── components/   # dashboard/, etl/, layout/, ui/
+│       ├── lib/          # api.ts, auth.ts, utils.ts
+│       ├── hooks/        # useApi, useComposition, useMobile, usePersistFn
+│       ├── types/        # artist, track, history, etl, user
+│       ├── router/       # ProtectedRoute
+│       ├── contexts/     # ThemeContext
+│       └── App.tsx, main.tsx
+├── server/               # Express — sirve build Vite en producción
+├── shared/               # Constantes compartidas (legado Manus)
+└── vite.config.ts        # Root Vite: root=frontend/, aliases @/@shared
 ```
-
----
-
-## Endpoints API
-
-### Autenticación
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/v1/auth/login` | Inicia flujo OAuth PKCE, retorna URL de Spotify |
-| POST | `/v1/auth/callback` | Recibe code y state, retorna JWT |
-
-### Datos (Requieren JWT)
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/v1/artists/top` | Top 5 artistas del usuario |
-| GET | `/v1/tracks/top` | Top 5 canciones del usuario |
-| GET | `/v1/history/peak-hour` | Hora pico de escucha |
-| GET | `/v1/history/genres` | Top 5 géneros |
-| GET | `/v1/history/stats` | Estadísticas rápidas |
-| GET | `/v1/profile/me` | Perfil del usuario |
-
-### ETL (Requieren JWT)
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/v1/etl/status` | Estado del DWH y historial de ejecuciones |
-| POST | `/v1/etl/run` | Ejecuta ETL completo |
-
----
-
-## Seguridad
-
-### JWT
-
-- **Expiración:** 8 horas
-- **Algoritmo:** HS256
-- **Almacenamiento:** localStorage (frontend)
-
-### PKCE
-
-- **code_verifier:** Generado en frontend, nunca enviado a Spotify
-- **code_challenge:** SHA256(code_verifier) en Base64URL
-- **state:** UUID único, verificado en callback
-
-### CORS
-
-- Solo permite requests desde `FRONTEND_URL`
-- Wildcard (*) deshabilitado
-
-### Tokens Spotify
-
-- **access_token:** Almacenado en BD (encriptado en producción)
-- **refresh_token:** Almacenado en BD, renovado automáticamente antes del ETL
-
----
-
-## Troubleshooting
-
-### "CORS error" al conectar frontend con backend
-
-**Solución:** Verificar que `FRONTEND_URL` en `.env` del backend coincida con la URL del frontend.
-
-```env
-FRONTEND_URL=http://localhost:3000
-```
-
-### "Connection refused" a PostgreSQL
-
-**Solución:** Verificar que PostgreSQL está corriendo y `DATABASE_URL` es correcto.
-
-```bash
-# Verificar conexión
-psql $DATABASE_URL -c "SELECT 1"
-```
-
-### "Token expirado" después de 8 horas
-
-**Solución:** El JWT expira automáticamente. El usuario debe hacer login nuevamente.
-
-### ETL falla con "Artista no encontrado"
-
-**Solución:** Ejecutar ETL nuevamente. Puede haber un problema de orden de carga. Verificar logs en `/v1/etl/status`.
-
----
-
-## Desarrollo
-
-### Agregar Migraciones (Alembic)
-
-```bash
-cd backend
-alembic revision --autogenerate -m "Descripción del cambio"
-alembic upgrade head
-```
-
-### Ejecutar Tests
-
-```bash
-cd backend
-pytest tests/
-```
-
-### Lint y Format
-
-```bash
-# Frontend
-cd client
-npm run format
-
-# Backend
-cd backend
-black app/
-flake8 app/
-```
-
----
-
-## Deployment
-
-### Frontend (Manus)
-
-1. Guardar checkpoint en Management UI
-2. Hacer clic en "Publish"
-3. Configurar dominio personalizado en Settings > Domains
-
-### Backend (Render, Railway, Heroku)
-
-1. Crear aplicación en plataforma
-2. Configurar variables de entorno (DATABASE_URL, SPOTIFY_*, JWT_SECRET, etc.)
-3. Ejecutar migraciones: `alembic upgrade head`
-4. Desplegar
-
----
-
-## Licencia
-
-Proyecto académico - Universidad de Pamplona 2026-I
-
-**Desarrolladores:** Suley & Jhonatan
-
-**Profesor:** Juan Alejandro Carrillo Jaimes
-
----
-
-## Contacto
-
-Para preguntas o issues, contactar a los desarrolladores o abrir un issue en GitHub.

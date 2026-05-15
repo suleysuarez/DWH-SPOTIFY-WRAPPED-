@@ -1,13 +1,14 @@
 /**
- * Navbar — visible in all protected routes.
- * Design: Glassmorphism Premium Dark
- * - Sticky top bar with backdrop-blur
- * - Spotify green active indicator
- * - User avatar + logout
+ * Navbar — Barra de navegación sticky para rutas protegidas.
+ *
+ * Diseño: glassmorphism (rgba(18,18,18,0.85) + backdrop-blur(16px)).
+ * Rutas: /dashboard, /profile, /etl con indicador verde activo (#1DB954).
+ * El botón de logout llama a logout() de lib/auth.ts (borra "app_token" y redirige a /login).
+ * La ruta activa se detecta con useLocation() de Wouter.
  */
 
 import { logout } from "@/lib/auth";
-import { LayoutDashboard, User, Database, LogOut, Music2 } from "lucide-react";
+import { LayoutDashboard, User, Database, LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -43,15 +44,14 @@ export default function Navbar() {
       <div className="container flex items-center justify-between h-16">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2.5 group">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 group-hover:scale-110"
-            style={{ background: "linear-gradient(135deg, #1DB954, #1ed760)" }}
-          >
-            <Music2 className="w-4 h-4 text-black" />
-          </div>
+          <img
+            src="/images/logo_spotify.png"
+            alt="Spotify"
+            className="w-8 h-8 object-contain transition-all duration-200 group-hover:scale-110"
+          />
           <span
             className="font-bold text-sm hidden sm:block"
-            style={{ fontFamily: "Nunito, sans-serif", color: "#fff" }}
+            style={{ fontFamily: "DM Sans, sans-serif", color: "#fff" }}
           >
             Spotify <span style={{ color: "#1DB954" }}>Wrapped</span>
           </span>

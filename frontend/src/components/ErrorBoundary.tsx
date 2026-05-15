@@ -1,3 +1,12 @@
+/**
+ * ErrorBoundary — Límite de error React para capturar excepciones no controladas.
+ *
+ * Envuelve toda la aplicación en App.tsx. Si algún componente lanza un error
+ * durante el renderizado, muestra una pantalla de error con el stack trace
+ * y un botón para recargar la página.
+ * Implementado como Class Component porque los hooks no soportan getDerivedStateFromError.
+ */
+
 import { cn } from "@/lib/utils";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Component, ReactNode } from "react";

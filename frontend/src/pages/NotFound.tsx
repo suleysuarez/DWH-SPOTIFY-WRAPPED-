@@ -1,3 +1,9 @@
+/**
+ * NotFound.tsx — Página 404.
+ *
+ * Se muestra para cualquier ruta no definida en el Switch de App.tsx.
+ * Botón "Volver al inicio" redirige a "/" (que a su vez hace redirect a /dashboard).
+ */
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Home } from "lucide-react";
 import { useLocation } from "wouter";
@@ -19,7 +25,7 @@ export default function NotFound() {
         </div>
         <h1
           className="text-6xl font-black text-white mb-2"
-          style={{ fontFamily: "Nunito, sans-serif" }}
+          style={{ fontFamily: "DM Sans, sans-serif" }}
         >
           404
         </h1>

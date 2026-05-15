@@ -1,6 +1,16 @@
 /**
- * TopArtistsCard — displays top artists with image, name, and popularity bar.
- * Design: Glassmorphism Premium Dark
+ * TopArtistsCard.tsx — Lista de top 5 artistas con imagen y barra de popularidad.
+ *
+ * Props:
+ *   artists → Artist[] | null  (de GET /v1/artists/top, top 5 del array)
+ *   loading → boolean
+ *   error   → string | null
+ *   onRetry → () => void
+ *
+ * Estados: SkeletonList (cargando) | ErrorState | EmptyState | lista de artistas.
+ * Muestra imagen del artista desde `artist.images[0].url`; si no hay imagen,
+ * muestra la inicial del nombre con fondo verde Spotify.
+ * La barra de popularidad usa `artist.popularity` (0-100).
  */
 
 import type { Artist } from "@/types/artist";
@@ -38,7 +48,7 @@ export default function TopArtistsCard({
         <div>
           <h3
             className="text-sm font-bold text-white"
-            style={{ fontFamily: "Nunito, sans-serif" }}
+            style={{ fontFamily: "DM Sans, sans-serif" }}
           >
             Top Artistas
           </h3>

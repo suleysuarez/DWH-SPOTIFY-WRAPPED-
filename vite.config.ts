@@ -1,3 +1,19 @@
+/**
+ * vite.config.ts — Configuración de Vite para el proyecto.
+ *
+ * Root: frontend/ — el build se genera en dist/public/.
+ * Aliases: @ → frontend/src, @shared → shared/, @assets → attached_assets/
+ * envDir apunta a la raíz del monorepo (lee .env / .env.local allí).
+ *
+ * Plugins activos:
+ *   - @vitejs/plugin-react (JSX + Fast Refresh)
+ *   - @tailwindcss/vite (Tailwind CSS 4 via Vite)
+ *   - @builder.io/vite-plugin-jsx-loc (atributos de ubicación JSX para Manus)
+ *   - vite-plugin-manus-runtime (integración con plataforma Manus)
+ *   - vitePluginManusDebugCollector (captura logs de browser a .manus-logs/)
+ *   - vitePluginStorageProxy (proxy a /manus-storage para assets de Manus)
+ */
+
 import { jsxLocPlugin } from "@builder.io/vite-plugin-jsx-loc";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";

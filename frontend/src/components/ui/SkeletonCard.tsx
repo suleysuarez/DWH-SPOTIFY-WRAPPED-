@@ -1,5 +1,12 @@
 /**
- * SkeletonCard — glassmorphism skeleton loader for dashboard cards.
+ * SkeletonCard — Componentes de skeleton loader para el dashboard.
+ *
+ * Exports:
+ *   Skeleton     — bloque simple con shimmer (tamaño vía `className`)
+ *   SkeletonCard — tarjeta glass completa con 4 líneas dummy (para KPI cards)
+ *   SkeletonList — lista de N filas con avatar circular + dos líneas de texto (default 5)
+ *
+ * El efecto `skeleton-shimmer` está definido en frontend/src/index.css.
  */
 
 import { cn } from "@/lib/utils";

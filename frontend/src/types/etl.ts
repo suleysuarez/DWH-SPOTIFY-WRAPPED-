@@ -1,3 +1,13 @@
+/**
+ * etl.ts — Tipos TypeScript para el pipeline ETL y estado del DWH.
+ *
+ * `DwhTable`        → tablas del schema `dwh` reportadas por GET /v1/etl/status
+ * `EtlRun`          → filas de etl_audit (nota: `records_extracted/loaded` son campos
+ *                     del frontend — el backend envía `artists_new`, `tracks_new`, `history_new`)
+ * `EtlRunResponse`  → respuesta de POST /v1/etl/run (incluye `logs` como strings crudos)
+ * `EtlLogLine`      → tipo local del frontend para clasificar logs por severidad
+ */
+
 export type TableStatus = "loaded" | "empty" | "stale";
 
 export interface DwhTable {

@@ -1,9 +1,10 @@
 """
 filename: spotify_client.py
-author: Suley & Jhonatan
-date: 2026-05-12
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
 version: 1.0
-description: Cliente HTTP reutilizable para Spotify API. Maneja requests, errores y renovación de tokens.
+description: Cliente HTTP estático para la Spotify Web API. Consume /me, /me/top/artists,
+             /me/top/tracks y /me/player/recently-played para el pipeline ETL.
 """
 
 import requests

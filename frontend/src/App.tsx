@@ -1,14 +1,12 @@
 /**
- * App.tsx — Root component with routing.
- * Routes:
- *   /login     → Login (public)
- *   /callback  → Callback (public, processes JWT)
- *   /dashboard → Dashboard (protected)
- *   /profile   → Profile (protected)
- *   /etl       → ETL (protected)
+ * App.tsx — Componente raíz con enrutamiento Wouter y providers globales.
  *
- * Design: Glassmorphism Premium Dark (Spotify-inspired)
- * Theme: dark by default — matches #121212 background
+ * Rutas públicas:    /login, /callback (sin autenticación requerida).
+ * Rutas protegidas:  /dashboard, /profile, /etl — envueltas en ProtectedRoute.
+ * /  → redirige a /dashboard (ProtectedRoute redirige a /login si el token expiró).
+ *
+ * Providers globales: ThemeProvider (dark fijo), TooltipProvider, ErrorBoundary.
+ * Toast notifications: Sonner con estilo glassmorphism.
  */
 
 import { Toaster } from "@/components/ui/sonner";

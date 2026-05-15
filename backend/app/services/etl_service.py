@@ -1,9 +1,15 @@
 """
-filename: etl_service.py
-author: Suley & Jhonatan
-date: 2026-05-12
-version: 1.0
-description: Servicio ETL: orquesta las 3 fases (extract, transform, load) del pipeline de sincronización con Spotify.
+etl_service.py (LEGACY — app/services/) — Orquestador ETL original.
+
+⚠️  ARCHIVO LEGACY: Usado por los routers legacy (app/routers/) que NO están
+    montados en la app activa. La versión activa es app/v1/services/etl_service.py.
+
+Diferencias con la versión activa (v1):
+- extract_recently_played() acepta cursor_next_ms (nombrado diferente a after).
+- load_user() retorna user_id (int) en lugar de spotify_id (str).
+- load_artists/tracks no actualiza géneros/popularidad al hacer upsert.
+- No incluye la lógica de artist fallback cuando falta el artista de un track.
+- Usa SpotifyClient de v1 para las llamadas HTTP (no SpotifyService de legacy).
 """
 
 import logging
@@ -106,6 +112,7 @@ class EtlService:
             Dict[str, Any]: Objeto normalizado para dim_users.
         """
         logger.info("Transformando datos del usuario...")
+        images = user_data.get("images", [])
         transformed = {
             "spotify_id": user_data["id"],
             "display_name": user_data.get("display_name"),
@@ -113,6 +120,7 @@ class EtlService:
             "country": user_data.get("country"),
             "followers": user_data.get("followers", {}).get("total", 0),
             "product": user_data.get("product", "free"),
+            "image_url": images[0]["url"] if images else None,
         }
         logger.info(f"Usuario transformado: {transformed['spotify_id']}")
         return transformed

@@ -1,11 +1,12 @@
 /**
- * Reusable API wrapper for the FastAPI backend.
+ * api.ts — Cliente HTTP tipado para el backend FastAPI.
  *
- * Features:
- * - Automatic Bearer token injection from localStorage
- * - Automatic 401 handling → redirect to /login
- * - Generic TypeScript typing for all responses
- * - Base URL from VITE_API_URL environment variable
+ * - Inyecta automáticamente el Bearer token desde localStorage ("app_token").
+ * - Un 401 llama a logout() y lanza ApiError (redirige a /login).
+ * - Expone `api.get/post/put/delete` genéricos y `endpoints` con métodos nombrados.
+ * - Base URL: variable de entorno VITE_API_URL (fallback: http://127.0.0.1:8000).
+ *
+ * Nota: PeakHourCard.tsx y EtlHistoryTable.tsx usan fetch directo en lugar de este módulo.
  */
 
 import { getToken, logout } from "./auth";

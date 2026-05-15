@@ -1,6 +1,12 @@
 /**
- * Generic hook for API calls with loading, error, and data state.
- * Automatically fetches on mount and provides a refetch function.
+ * useApi — Hook genérico de fetching con estados loading/error/data/refetch.
+ *
+ * El `fetcher` se ejecuta en el montaje y en cada llamada a `refetch()`.
+ * Los errores ApiError y Error se exponen como strings en el estado `error`.
+ * No cancela requests — si el componente se desmonta antes de que resuelva, el
+ * estado se actualizará igualmente (sin causar errores, pero puede generar warnings).
+ *
+ * Ejemplo: const { data, loading, error, refetch } = useApi(() => endpoints.artists.top());
  */
 
 import { useState, useEffect, useCallback } from "react";

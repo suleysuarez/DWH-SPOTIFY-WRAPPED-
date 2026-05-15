@@ -1,5 +1,21 @@
 /**
- * DwhStatusTable — shows DWH table status with record counts and badges.
+ * DwhStatusTable.tsx — Tabla de estado de las tablas del DWH.
+ *
+ * Muestra para cada tabla: nombre, número de registros, última sync y badge de estado.
+ * Los datos provienen de GET /v1/etl/status (campo `tables`).
+ *
+ * Props:
+ *   tables  → DwhTable[] | null
+ *   loading → boolean
+ *   error   → string | null
+ *   onRetry → () => void
+ *
+ * Badges de estado (statusConfig):
+ *   "loaded" → verde (#1DB954)   — tabla tiene datos.
+ *   "empty"  → blanco/40         — tabla vacía.
+ *   "stale"  → naranja (#FFA500) — no implementado actualmente en el backend.
+ *
+ * La fecha de última sync se formatea con `es-UY` locale (dd MMM HH:mm).
  */
 
 import type { DwhTable, TableStatus } from "@/types/etl";
@@ -59,7 +75,7 @@ export default function DwhStatusTable({ tables, loading, error, onRetry }: DwhS
         <div>
           <h3
             className="text-sm font-bold text-white"
-            style={{ fontFamily: "Nunito, sans-serif" }}
+            style={{ fontFamily: "DM Sans, sans-serif" }}
           >
             Estado del DWH
           </h3>

@@ -1,8 +1,16 @@
 /**
- * Authentication helpers for JWT token management.
- * The token is stored in localStorage under the key "app_token".
- * The frontend NEVER talks directly to Spotify API — all auth
- * is handled by the FastAPI backend via OAuth PKCE.
+ * auth.ts — Helpers para gestión del JWT en localStorage.
+ *
+ * El token se almacena bajo la clave "app_token" (TOKEN_KEY).
+ * El frontend NUNCA habla directamente con la API de Spotify — todo el flujo OAuth
+ * PKCE (code_verifier, code_challenge, intercambio de código) lo maneja el backend.
+ *
+ * Funciones exportadas:
+ *   saveToken(token)  — guarda el JWT tras el callback OAuth
+ *   getToken()        — leído por lib/api.ts en cada request
+ *   removeToken()     — llamado por logout()
+ *   isTokenValid()    — decodifica base64url del payload, verifica claim `exp`
+ *   logout()          — borra token y redirige a /login
  */
 
 const TOKEN_KEY = "app_token";

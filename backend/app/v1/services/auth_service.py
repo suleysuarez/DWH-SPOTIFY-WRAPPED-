@@ -1,9 +1,10 @@
 """
 filename: auth_service.py
-author: Suley & Jhonatan
-date: 2026-05-12
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
 version: 1.0
-description: Servicio de autenticación OAuth PKCE y emisión de JWT.
+description: Servicio de autenticación OAuth PKCE y JWT. Genera par PKCE (verifier/challenge S256),
+             state CSRF y tokens JWT HS256 con expiración de 8h para proteger los endpoints.
 """
 
 import jwt

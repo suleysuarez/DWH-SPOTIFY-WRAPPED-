@@ -1,9 +1,10 @@
 """
 filename: profile.py
-author: Suley & Jhonatan
-date: 2026-05-12
+author: Suley Suárez y Jhonatan Vera
+date: 2026-05-15
 version: 1.0
-description: Schemas Pydantic para perfil de usuario.
+description: Schemas Pydantic para GET /v1/profile/me. ProfileResponse serializa DimUsers
+             al shape del frontend incluyendo spotify_id, email, country e image_url.
 """
 
 from datetime import datetime
@@ -19,6 +20,7 @@ class ProfileBase(BaseModel):
     country: Optional[str] = None
     followers: int = 0
     product: str = "free"
+    image_url: Optional[str] = None
 
 
 class ProfileResponse(ProfileBase):

@@ -1,13 +1,21 @@
 /**
- * Login Page
- * Design: Glassmorphism Premium Dark
- * - Fullscreen centered layout
- * - Large Spotify-inspired card with backdrop-blur
- * - Animated floating decorative elements
- * - Single CTA: "Conectar con Spotify"
+ * Login.tsx — Página de inicio de sesión con Spotify.
+ *
+ * Flujo:
+ * 1. Usuario hace clic en "Conectar con Spotify".
+ * 2. `handleConnect` hace fetch a `BACKEND_LOGIN_URL` (GET /v1/auth/login).
+ * 3. El backend retorna `{ authorization_url }` — URL de consentimiento de Spotify.
+ * 4. El frontend redirige con `window.location.href` (NO fetch) para que el
+ *    navegador siga el redirect de Spotify al callback.
+ *
+ * Nota: BACKEND_LOGIN_URL está hardcodeado a 127.0.0.1:8000. En producción
+ * debería leerse de import.meta.env.VITE_API_URL.
+ *
+ * Diseño: pantalla completa centrada, card glassmorphism con blobs animados
+ * y puntos flotantes decorativos. Fondo #121212, acento #1DB954.
  */
 
-import { Music2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const BACKEND_LOGIN_URL = "http://127.0.0.1:8000/v1/auth/login";
@@ -79,20 +87,16 @@ export default function Login() {
         }}
       >
         {/* Logo */}
-        <div
-          className="w-20 h-20 rounded-full flex items-center justify-center mb-6"
-          style={{
-            background: "linear-gradient(135deg, #1DB954 0%, #1ed760 100%)",
-            boxShadow: "0 8px 32px rgba(29,185,84,0.4)",
-          }}
-        >
-          <Music2 className="w-9 h-9 text-black" strokeWidth={2.5} />
-        </div>
+        <img
+          src="/images/logo_spotify.png"
+          alt="Spotify"
+          className="w-20 h-20 object-contain mb-6"
+        />
 
         {/* Title */}
         <h1
           className="text-3xl font-black text-white mb-1 tracking-tight"
-          style={{ fontFamily: "Nunito, sans-serif" }}
+          style={{ fontFamily: "DM Sans, sans-serif" }}
         >
           Mi Spotify Wrapped
         </h1>
@@ -111,7 +115,7 @@ export default function Login() {
             background: "linear-gradient(135deg, #1DB954, #1ed760)",
             color: "#000",
             boxShadow: "0 4px 24px rgba(29,185,84,0.35)",
-            fontFamily: "Nunito, sans-serif",
+            fontFamily: "DM Sans, sans-serif",
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLButtonElement).style.boxShadow =

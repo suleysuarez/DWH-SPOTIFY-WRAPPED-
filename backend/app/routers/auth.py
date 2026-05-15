@@ -1,6 +1,15 @@
 """
-Rutas de autenticación OAuth PKCE.
-Endpoints: /v1/auth/login, /v1/auth/callback
+auth.py (LEGACY — app/routers/) — Rutas de autenticación OAuth PKCE.
+
+⚠️  ARCHIVO LEGACY: Este router NO está montado en la aplicación activa.
+    El router equivalente activo es app/v1/routers/auth.py.
+
+Diferencias con la versión activa (v1):
+- El callback aquí es POST con body JSON; en v1 es GET con query params.
+- Usa `core/security.py` en lugar de `v1/services/auth_service.py`.
+- La sesión PKCE tiene campos adicionales (code_challenge, expires_at, used).
+
+Se conserva como referencia histórica del diseño original.
 """
 
 import logging

@@ -1,6 +1,21 @@
 /**
- * RunEtlPanel — triggers ETL execution and shows animated terminal log output.
- * Design: Terminal-style panel with Spotify green accents.
+ * RunEtlPanel.tsx — Panel para disparar el pipeline ETL con salida tipo terminal.
+ *
+ * Props:
+ *   onRunComplete → () => void  (callback que llama Etl.tsx para refrescar status)
+ *
+ * Estados internos (RunStatus): "idle" | "running" | "success" | "error"
+ *
+ * Flujo al hacer clic en "Sincronizar Ahora":
+ * 1. Muestra log inicial "Iniciando proceso ETL...".
+ * 2. Llama a POST /v1/etl/run vía endpoints.etl.run().
+ * 3. Anima los logs de la respuesta uno a uno (delay 120ms entre cada uno).
+ * 4. Muestra toast (sonner) de éxito o error.
+ * 5. Llama a onRunComplete() para que Etl.tsx refresque DwhStatusTable.
+ *
+ * parseLogLine() clasifica cada string del backend como "success" | "error" |
+ * "warning" | "info" según palabras clave (heurística simple).
+ * El cursor parpadeante indica que el ETL sigue ejecutándose.
  */
 
 import { useState, useRef, useEffect } from "react";
@@ -121,7 +136,7 @@ export default function RunEtlPanel({ onRunComplete }: RunEtlPanelProps) {
           <div>
             <h3
               className="text-sm font-bold text-white"
-              style={{ fontFamily: "Nunito, sans-serif" }}
+              style={{ fontFamily: "DM Sans, sans-serif" }}
             >
               Ejecutar ETL
             </h3>
@@ -159,7 +174,7 @@ export default function RunEtlPanel({ onRunComplete }: RunEtlPanelProps) {
           style={{
             background: status === "running" ? "rgba(29,185,84,0.3)" : "linear-gradient(135deg, #1DB954, #1ed760)",
             color: "#000",
-            fontFamily: "Nunito, sans-serif",
+            fontFamily: "DM Sans, sans-serif",
             opacity: status === "running" ? 0.7 : 1,
           }}
         >

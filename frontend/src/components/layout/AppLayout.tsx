@@ -1,6 +1,9 @@
 /**
- * AppLayout — wraps all protected pages with Navbar + main content area.
- * Design: Glassmorphism Premium Dark
+ * AppLayout — Shell de navegación para todas las rutas protegidas.
+ *
+ * Composición: Navbar sticky + <main> con container centrado.
+ * Fondo: #121212 (Glassmorphism Premium Dark).
+ * Todas las páginas protegidas (/dashboard, /profile, /etl) se renderizan como `children`.
  */
 
 import Navbar from "./Navbar";

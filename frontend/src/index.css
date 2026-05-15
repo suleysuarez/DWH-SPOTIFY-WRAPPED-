@@ -3,7 +3,7 @@
  * - Background: #121212 (Spotify dark)
  * - Cards: rgba(30,30,30,0.8) with backdrop-blur
  * - Accent: #1DB954 (Spotify green) as ambient light
- * - Typography: Nunito (headings) + Inter (body)
+ * - Typography: DM Sans — alternativa libre a Spotify Circular (tipografía oficial de Spotify)
  * - Depth via layered glass, color shadows, subtle gradients
  */
 
@@ -135,12 +135,12 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', sans-serif;
+    font-family: 'DM Sans', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Nunito', sans-serif;
+    font-family: 'DM Sans', sans-serif;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),

@@ -1,5 +1,15 @@
 /**
- * TopTracksCard — displays top tracks with name, artist, and duration.
+ * TopTracksCard.tsx — Lista de top 5 canciones con portada, nombre, artista y duración.
+ *
+ * Props:
+ *   tracks  → Track[] | null  (de GET /v1/tracks/top, top 5 del array)
+ *   loading → boolean
+ *   error   → string | null
+ *   onRetry → () => void
+ *
+ * Estados: SkeletonList | ErrorState | EmptyState | lista de tracks.
+ * La portada del álbum viene de `track.album_image`; si no hay, muestra icono Music.
+ * La duración se formatea con `formatDuration(ms)` de types/track.ts (mm:ss).
  */
 
 import type { Track } from "@/types/track";
@@ -35,7 +45,7 @@ export default function TopTracksCard({
         <div>
           <h3
             className="text-sm font-bold text-white"
-            style={{ fontFamily: "Nunito, sans-serif" }}
+            style={{ fontFamily: "DM Sans, sans-serif" }}
           >
             Top Canciones
           </h3>

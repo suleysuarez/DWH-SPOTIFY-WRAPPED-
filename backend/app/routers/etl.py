@@ -1,6 +1,16 @@
 """
-Rutas ETL: status, run.
-Endpoints para monitorear y ejecutar el pipeline ETL.
+etl.py (LEGACY — app/routers/) — Rutas ETL: status y run.
+
+⚠️  ARCHIVO LEGACY: Este router NO está montado en la aplicación activa.
+    El router equivalente activo es app/v1/routers/etl.py.
+
+Diferencias con la versión activa (v1):
+- Autenticación via header Authorization string (no HTTPBearer).
+- El EtlAudit tiene schema diferente (user_id en lugar de spotify_user_id).
+- Incluye renovación automática de token Spotify si está expirado.
+- No incluye el endpoint GET /history.
+
+Se conserva como referencia histórica del diseño original.
 """
 
 import logging

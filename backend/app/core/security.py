@@ -1,5 +1,14 @@
 """
-Funciones de seguridad: JWT, PKCE, token verification.
+security.py — Utilidades de seguridad: JWT y PKCE.
+
+NOTA: Este módulo pertenece al flujo LEGACY (app/routers/). El flujo activo
+usa `app/v1/services/auth_service.py` (clase AuthService) que reimplementa
+las mismas operaciones. Ambos leen la misma configuración de `settings`.
+
+Expone funciones de bajo nivel para:
+- Generación de tokens PKCE (code_verifier / code_challenge S256).
+- Creación y verificación de JWT firmados con HS256.
+- Extracción del Bearer token del header Authorization.
 """
 
 import jwt

@@ -1,6 +1,13 @@
 """
-Schemas Pydantic para validación de requests/responses.
-Convención: Base, Request, Response para cada entidad.
+schemas.py (LEGACY — app/schemas/) — Schemas Pydantic para request/response.
+
+⚠️  ARCHIVO LEGACY: Estos schemas son usados por los routers legacy
+    (app/routers/auth.py, data.py, etl.py) que NO están montados en la app activa.
+    Los schemas activos están en app/v1/schemas/.
+
+Contiene todos los schemas en un único archivo (en v1 se separaron por recurso).
+Incluye algunos campos que el modelo ORM actual no tiene (e.g. images_url,
+history_id, created_at) — artefactos del diseño original.
 """
 
 from datetime import datetime

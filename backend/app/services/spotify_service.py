@@ -1,6 +1,15 @@
 """
-Servicio para interactuar con Spotify API.
-Incluye funciones para obtener token, datos de usuario, artistas, canciones, historial.
+spotify_service.py (LEGACY — app/services/) — Cliente HTTP para Spotify API.
+
+⚠️  ARCHIVO LEGACY: Usado por app/v1/routers/auth.py para el intercambio
+    de code→token en el callback OAuth. NO es un archivo completamente inactivo:
+    auth.py (v1) lo importa para `SpotifyService.get_access_token()`.
+
+Diferencias con SpotifyClient (v1/services/spotify_client.py):
+- Lee client_id/client_secret desde settings (no requiere parámetros explícitos).
+- `get_recently_played` usa el parámetro `before` (en lugar de `after`).
+- URL incorrecta: `/me/player/recently_played` (guión bajo) en lugar de
+  `/me/player/recently-played` (guión medio) — posible bug en producción.
 """
 
 import requests

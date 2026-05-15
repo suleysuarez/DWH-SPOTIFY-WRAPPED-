@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"ProtectedRoute\\\\|PrivateRoute\")",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(venv\\\\Scripts\\\\pip install *)"
+    ]
+  }
+}

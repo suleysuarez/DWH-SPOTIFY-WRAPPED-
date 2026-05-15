@@ -1,12 +1,20 @@
 """
-filename: 001_initial_schema.py
-author: Suley & Jhonatan
-date: 2026-05-12
-version: 1.0
-description: Migración inicial: crea schema dwh y todas las tablas del star schema.
+001_initial_schema.py — Migración inicial del DWH.
+
+Crea el schema `dwh` y todas las tablas del star schema de Spotify Wrapped:
+    dwh.dim_users            → perfil y tokens OAuth del usuario.
+    dwh.dim_artists          → catálogo de artistas (con genres ARRAY).
+    dwh.dim_tracks           → catálogo de canciones.
+    dwh.fact_listening_history → historial de escucha con UniqueConstraint(user_id, played_at).
+    dwh.etl_audit            → log de ejecuciones del pipeline ETL.
+    public.pkce_sessions     → sesiones PKCE temporales para OAuth.
+
+Nota: esta migración es la única existente. Cambios posteriores en los modelos
+(como image_url en dim_artists o album_image_url en dim_tracks) se aplicaron
+mediante `Base.metadata.create_all` en desarrollo, no con Alembic.
 
 Revision ID: 001
-Revises: 
+Revises: (ninguno — migración base)
 Create Date: 2026-05-12
 """
 

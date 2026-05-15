@@ -1,6 +1,18 @@
 /**
- * GenresChart — horizontal bar chart showing top 5 genres.
- * Uses Recharts BarChart with custom Spotify green styling.
+ * GenresChart.tsx — Gráfico de barras horizontales con top 5 géneros musicales.
+ *
+ * Props:
+ *   genres  → GenreData[] | null  (de GET /v1/history/genres, primeros 5)
+ *   loading → boolean
+ *   error   → string | null
+ *   onRetry → () => void
+ *
+ * Usa Recharts BarChart en layout "vertical" (categorías en eje Y, valores en X).
+ * Las barras van de verde opaco (#1DB954) a más transparente según el índice,
+ * creando un efecto de degradado visual entre los géneros.
+ * El tooltip muestra el género y el número de reproducciones.
+ *
+ * Estados: SkeletonList (5 filas) | ErrorState | mensaje vacío | gráfico.
  */
 
 import type { GenreData } from "@/types/history";
@@ -59,7 +71,7 @@ export default function GenresChart({ genres, loading, error, onRetry }: GenresC
         <div>
           <h3
             className="text-sm font-bold text-white"
-            style={{ fontFamily: "Nunito, sans-serif" }}
+            style={{ fontFamily: "DM Sans, sans-serif" }}
           >
             Géneros Dominantes
           </h3>

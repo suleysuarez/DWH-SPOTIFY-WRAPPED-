@@ -1,10 +1,15 @@
+/**
+ * usePersistFn — Referencia estable a una función sin declarar dependencias.
+ *
+ * La función retornada nunca cambia de referencia entre renders (útil para
+ * listeners y callbacks que no deben invalidar efectos), pero siempre ejecuta
+ * la última versión de `fn` capturada a través de un ref interno.
+ * Alternativa a useCallback cuando el array de dependencias sería tedioso.
+ */
+
 import { useRef } from "react";
 
 type noop = (...args: any[]) => any;
-
-/**
- * usePersistFn instead of useCallback to reduce cognitive load
- */
 export function usePersistFn<T extends noop>(fn: T) {
   const fnRef = useRef<T>(fn);
   fnRef.current = fn;
