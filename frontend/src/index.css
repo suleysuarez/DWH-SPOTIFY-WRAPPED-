@@ -58,6 +58,8 @@
 }
 
 :root {
+
+  
   --radius: 0.75rem;
   /* Spotify dark theme as default */
   --background: oklch(0.13 0 0);
@@ -249,3 +251,4 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(29, 185, 84, 0.4);
 }
+
