@@ -8,6 +8,7 @@ description: Orquestador del pipeline ETL (versión activa). Clase EtlService co
 """
 
 import logging
+import requests
 from datetime import datetime
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
@@ -15,12 +16,51 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.models.models import DimUsers, DimArtists, DimTracks, FactListeningHistory
 from app.v1.services.spotify_client import SpotifyClient
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class EtlService:
     """Orquestador del pipeline ETL."""
+
+    # ============ HELPERS ============
+
+    @staticmethod
+    def fetch_lastfm_genres(artist_name: str) -> List[str]:
+        """
+        Obtiene los géneros/tags de un artista desde la API de Last.fm.
+
+        Args:
+            artist_name (str): Nombre del artista a consultar.
+
+        Returns:
+            List[str]: Lista de géneros (top 5 tags), vacía si no hay API key o falla la llamada.
+        """
+        if not settings.LASTFM_API_KEY:
+            logger.warning("LASTFM_API_KEY no configurado, saltando géneros")
+            return []
+        try:
+            response = requests.get(
+                "https://ws.audioscrobbler.com/2.0/",
+                params={
+                    "method": "artist.getTopTags",
+                    "artist": artist_name,
+                    "api_key": settings.LASTFM_API_KEY,
+                    "format": "json",
+                    "autocorrect": 1,
+                },
+                timeout=5,
+            )
+            data = response.json()
+            logger.info(f"[LASTFM] {artist_name} → raw: {data}")
+            tags = data.get("toptags", {}).get("tag", [])
+            genres = [t["name"].lower() for t in tags[:5] if t.get("name")]
+            logger.info(f"[LASTFM] {artist_name} → genres: {genres}")
+            return genres
+        except Exception as e:
+            logger.warning(f"Last.fm fallo para '{artist_name}': {e}")
+            return []
 
     # ============ EXTRACT ============
 
@@ -55,6 +95,9 @@ class EtlService:
         response = SpotifyClient.get_top_artists(token, limit=50)
         artists = response.get("items", [])
         logger.info(f"Artistas extraidos: {len(artists)}")
+        if artists:
+            a = artists[0]
+            logger.info(f"[DEBUG] Primer artista crudo — name={a.get('name')} popularity={a.get('popularity')} followers={a.get('followers')} genres={a.get('genres')}")
         return artists
 
     @staticmethod
@@ -229,6 +272,32 @@ class EtlService:
         logger.info(f"Historial transformado: {len(transformed)}")
         return transformed
 
+    @staticmethod
+    def backfill_artist_genres(db: Session) -> int:
+        """
+        Enriquece con Last.fm todos los artistas del DWH que aún tienen genres vacío.
+
+        Returns:
+            int: Cantidad de artistas actualizados.
+        """
+        if not settings.LASTFM_API_KEY:
+            return 0
+        from sqlalchemy import func as sa_func
+        empty_artists = db.query(DimArtists).filter(
+            sa_func.coalesce(sa_func.cardinality(DimArtists.genres), 0) == 0
+        ).all()
+        updated = 0
+        for artist in empty_artists:
+            genres = EtlService.fetch_lastfm_genres(artist.name)
+            if genres:
+                artist.genres = genres
+                flag_modified(artist, "genres")
+                updated += 1
+        if updated:
+            db.commit()
+        logger.info(f"[LASTFM] Backfill géneros: {updated}/{len(empty_artists)} artistas actualizados")
+        return updated
+
     # ============ LOAD ============
 
     @staticmethod
@@ -281,15 +350,21 @@ class EtlService:
         updated_count = 0
         for artist in artists_data:
             existing = db.query(DimArtists).filter_by(spotify_id=artist["spotify_id"]).first()
+            incoming_genres = artist.get("genres") or []
+            if not incoming_genres:
+                incoming_genres = EtlService.fetch_lastfm_genres(artist["name"])
+
             if not existing:
+                artist["genres"] = incoming_genres
                 db.add(DimArtists(**artist))
                 new_count += 1
             else:
-                # Actualizar campos que pueden cambiar
-                existing.genres = list(artist.get("genres", []))
+                existing.genres = incoming_genres or existing.genres or []
                 flag_modified(existing, "genres")
-                existing.popularity = artist.get("popularity", existing.popularity)
-                existing.followers_count = artist.get("followers_count", existing.followers_count)
+                if artist.get("popularity") is not None:
+                    existing.popularity = artist["popularity"]
+                if artist.get("followers_count") is not None:
+                    existing.followers_count = artist["followers_count"]
                 if artist.get("image_url"):
                     existing.image_url = artist["image_url"]
                 updated_count += 1
@@ -333,7 +408,8 @@ class EtlService:
                 new_count += 1
             else:
                 # Actualizar campos que pueden estar en NULL por datos históricos
-                existing.popularity = track.get("popularity", existing.popularity)
+                if track.get("popularity") is not None:
+                    existing.popularity = track["popularity"]
                 existing.explicit = track.get("explicit") if track.get("explicit") is not None else existing.explicit
                 if track.get("album_image_url"):
                     existing.album_image_url = track["album_image_url"]
@@ -375,6 +451,9 @@ class EtlService:
                 spotify_id=item["spotify_track_id"]
             ).first()
 
+            if track and track.popularity is None and item.get("popularity") is not None:
+                track.popularity = item["popularity"]
+
             if not track:
                 # Canción fuera del top 50 — crearla con los datos de recently-played.
                 # Usamos savepoint (begin_nested) para que un fallo de constraint
@@ -389,10 +468,11 @@ class EtlService:
                     with db.begin_nested():
                         artist = db.query(DimArtists).filter_by(spotify_id=spotify_artist_id).first()
                         if not artist:
+                            stub_genres = EtlService.fetch_lastfm_genres(item.get("artist_name", ""))
                             artist = DimArtists(
                                 spotify_id=spotify_artist_id,
                                 name=item.get("artist_name", "Desconocido"),
-                                genres=[],
+                                genres=stub_genres,
                             )
                             db.add(artist)
                             db.flush()

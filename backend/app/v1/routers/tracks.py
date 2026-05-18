@@ -91,10 +91,14 @@ def get_top_tracks(
     ).limit(10).all()
 
     tracks = []
-    for rank, (track, artist_name, play_count) in enumerate(rows, start=1):
-        track.artist_name = artist_name
-        track.play_count = play_count
-        track.rank = rank
-        tracks.append(TrackResponse.model_validate(track))
+    if rows:
+        max_plays = max(play_count for _, _, play_count in rows) or 1
+        for rank, (track, artist_name, play_count) in enumerate(rows, start=1):
+            track.artist_name = artist_name
+            track.play_count = play_count
+            track.rank = rank
+            if track.popularity is None:
+                track.popularity = round(play_count * 100 / max_plays)
+            tracks.append(TrackResponse.model_validate(track))
 
     return TracksResponse(tracks=tracks, total=len(tracks))
