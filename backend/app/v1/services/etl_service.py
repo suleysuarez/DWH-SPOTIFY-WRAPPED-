@@ -383,6 +383,10 @@ class EtlService:
                     existing.popularity = artist["popularity"]
                 if artist.get("followers_count") is not None:
                     existing.followers_count = artist["followers_count"]
+                if existing.followers_count is None:  # ← agrega esto
+                    listeners = EtlService.fetch_lastfm_listeners(existing.name)
+                    if listeners:
+                        existing.followers_count = listeners
                 if artist.get("image_url"):
                     existing.image_url = artist["image_url"]
                 updated_count += 1
@@ -553,3 +557,30 @@ class EtlService:
         db.commit()
         logger.info(f"Historial cargado: {new_count} nuevos, {skipped_count} saltados")
         return new_count, skipped_count
+
+
+    @staticmethod
+    def fetch_lastfm_listeners(artist_name: str) -> Optional[int]:
+        """
+        Obtiene el número de listeners de un artista desde Last.fm.
+        """
+        if not settings.LASTFM_API_KEY:
+            return None
+        try:
+            response = requests.get(
+                "https://ws.audioscrobbler.com/2.0/",
+                params={
+                    "method": "artist.getInfo",
+                    "artist": artist_name,
+                    "api_key": settings.LASTFM_API_KEY,
+                    "format": "json",
+                    "autocorrect": 1,
+                },
+                timeout=2,
+            )
+            data = response.json()
+            listeners = data.get("artist", {}).get("stats", {}).get("listeners")
+            return int(listeners) if listeners else None
+        except Exception as e:
+            logger.warning(f"Last.fm listeners fallo para '{artist_name}': {e}")
+            return None
