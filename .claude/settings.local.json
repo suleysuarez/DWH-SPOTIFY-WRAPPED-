@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -v -E \"\\(\\\\.git/|__pycache__|node_modules|/venv/|\\\\.pyc$|/dist/|/\\\\.venv/|/build/\\)\")",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}

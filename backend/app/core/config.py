@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     def get_allow_hosts(self) -> List[str]:
         return [h.strip() for h in self.ALLOW_HOSTS.split(",")]
 
+    # Last.fm (géneros de artistas)
+    LASTFM_API_KEY: str = ""
+
     # Logging
     LOG_LEVEL: str = "INFO"
 

@@ -28,6 +28,8 @@ router = APIRouter(prefix="/etl", tags=["etl"])
 bearer_scheme = HTTPBearer()
 
 
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
@@ -140,6 +142,10 @@ def run_etl(
         artists_new, artists_skipped = EtlService.load_artists(db, artists_transformed)
         tracks_new, tracks_skipped = EtlService.load_tracks(db, tracks_transformed)
         history_new, history_skipped = EtlService.load_history(db, current_user.spotify_id, history_transformed)
+
+        genres_updated = EtlService.backfill_artist_genres(db)
+        if genres_updated:
+            logs.append(f"Géneros enriquecidos con Last.fm: {genres_updated} artistas actualizados")
 
         logs.append(f"Cargado: {artists_new} artistas nuevos, {tracks_new} canciones nuevas, {history_new} historial nuevo")
 

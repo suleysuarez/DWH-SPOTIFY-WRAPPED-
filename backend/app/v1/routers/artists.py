@@ -74,9 +74,15 @@ def get_top_artists(
     ).limit(10).all()
 
     artists = []
-    for rank, (artist, play_count) in enumerate(rows, start=1):
-        artist.play_count = play_count
-        artist.rank = rank
-        artists.append(ArtistResponse.model_validate(artist))
+    if rows:
+        max_plays = max(play_count for _, play_count in rows) or 1
+        for rank, (artist, play_count) in enumerate(rows, start=1):
+            artist.play_count = play_count
+            artist.rank = rank
+            # Spotify no retorna popularity para apps en modo desarrollo;
+            # calculamos una popularidad personal normalizada a 0-100.
+            if artist.popularity is None:
+                artist.popularity = round(play_count * 100 / max_plays)
+            artists.append(ArtistResponse.model_validate(artist))
 
     return ArtistsResponse(artists=artists, total=len(artists))
