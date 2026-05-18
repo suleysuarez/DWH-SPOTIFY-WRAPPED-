@@ -289,11 +289,13 @@ class EtlService:
         updated = 0
         for artist in empty_artists:
             genres = EtlService.fetch_lastfm_genres(artist.name)
+            # Guardar siempre: géneros reales si los hay, o [''] como sentinel
+            # para no reintentar en futuros ETLs (el endpoint ya filtra strings vacíos).
+            artist.genres = genres if genres else [""]
+            flag_modified(artist, "genres")
             if genres:
-                artist.genres = genres
-                flag_modified(artist, "genres")
                 updated += 1
-        if updated:
+        if empty_artists:
             db.commit()
         logger.info(f"[LASTFM] Backfill géneros: {updated}/{len(empty_artists)} artistas actualizados")
         return updated
@@ -352,14 +354,15 @@ class EtlService:
             existing = db.query(DimArtists).filter_by(spotify_id=artist["spotify_id"]).first()
             incoming_genres = artist.get("genres") or []
             if not incoming_genres:
-                incoming_genres = EtlService.fetch_lastfm_genres(artist["name"])
+                fetched = EtlService.fetch_lastfm_genres(artist["name"])
+                incoming_genres = fetched if fetched else [""]
 
             if not existing:
                 artist["genres"] = incoming_genres
                 db.add(DimArtists(**artist))
                 new_count += 1
             else:
-                existing.genres = incoming_genres or existing.genres or []
+                existing.genres = incoming_genres if incoming_genres else (existing.genres or [""])
                 flag_modified(existing, "genres")
                 if artist.get("popularity") is not None:
                     existing.popularity = artist["popularity"]
@@ -468,11 +471,11 @@ class EtlService:
                     with db.begin_nested():
                         artist = db.query(DimArtists).filter_by(spotify_id=spotify_artist_id).first()
                         if not artist:
-                            stub_genres = EtlService.fetch_lastfm_genres(item.get("artist_name", ""))
+                            fetched = EtlService.fetch_lastfm_genres(item.get("artist_name", ""))
                             artist = DimArtists(
                                 spotify_id=spotify_artist_id,
                                 name=item.get("artist_name", "Desconocido"),
-                                genres=stub_genres,
+                                genres=fetched if fetched else [""],
                             )
                             db.add(artist)
                             db.flush()
