@@ -145,7 +145,10 @@ def run_etl(
 
         genres_updated = EtlService.backfill_artist_genres(db)
         if genres_updated:
-            logs.append(f"Géneros enriquecidos con Last.fm: {genres_updated} artistas actualizados")
+            logs.append(f"Genres enriched via Last.fm: {genres_updated} artists updated")
+        stats_updated = EtlService.backfill_artist_stats(db)
+        if stats_updated:
+            logs.append(f"Artist stats enriched via Last.fm: {stats_updated} artists updated")
 
         logs.append(f"Cargado: {artists_new} artistas nuevos, {tracks_new} canciones nuevas, {history_new} historial nuevo")
 

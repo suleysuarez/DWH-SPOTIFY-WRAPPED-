@@ -315,6 +315,60 @@ class EtlService:
         logger.info(f"[LASTFM] Backfill géneros: {updated}/{len(empty_artists)} artistas actualizados")
         return updated
 
+    @staticmethod
+    def backfill_artist_stats(db: Session) -> int:
+        """
+        Enriquece con Last.fm los artistas que tienen popularity o followers_count en NULL.
+        Usa -1 como sentinel para no reintentar artistas sin datos en Last.fm.
+
+        Returns:
+            int: Cantidad de artistas actualizados con al menos un campo.
+        """
+        if not settings.LASTFM_API_KEY:
+            return 0
+        artists = db.query(DimArtists).filter(
+            (DimArtists.popularity.is_(None)) | (DimArtists.followers_count.is_(None))
+        ).filter(
+            DimArtists.popularity != -1
+        ).all()
+        if not artists:
+            return 0
+
+        def fetch_stats(name: str) -> Dict[str, Optional[int]]:
+            listeners = EtlService.fetch_lastfm_listeners(name)
+            playcount = EtlService.fetch_lastfm_playcount(name)
+            return {"listeners": listeners, "playcount": playcount}
+
+        results: Dict[str, Dict[str, Optional[int]]] = {}
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_name = {
+                executor.submit(fetch_stats, a.name): a.name
+                for a in artists
+            }
+            for future in as_completed(future_to_name):
+                name = future_to_name[future]
+                try:
+                    results[name] = future.result()
+                except Exception:
+                    results[name] = {"listeners": None, "playcount": None}
+
+        updated = 0
+        for artist in artists:
+            stats = results.get(artist.name, {})
+            changed = False
+            if artist.followers_count is None:
+                artist.followers_count = stats.get("listeners") or -1
+                changed = True
+            if artist.popularity is None:
+                artist.popularity = stats.get("playcount") or -1
+                changed = True
+            if changed and (stats.get("listeners") or stats.get("playcount")):
+                updated += 1
+        if artists:
+            db.commit()
+        logger.info(f"[LASTFM] Backfill stats: {updated}/{len(artists)} artistas actualizados")
+        return updated
+
     # ============ LOAD ============
 
     @staticmethod
