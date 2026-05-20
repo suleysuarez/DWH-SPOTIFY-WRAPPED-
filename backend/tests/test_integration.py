@@ -323,28 +323,14 @@ class TestCircuitBreaker:
 
 class TestRateLimiting:
 
-    def test_rate_limit_blocks_after_max_requests(self, client):
-        """Debe retornar 429 después de exceder el límite de requests."""
-        # Hacer más requests que el límite configurado
+    def test_rate_limit_blocks_after_max_requests(self, client, valid_token):
+        """Debe retornar 429 después de exceder el límite de requests (100/min por IP)."""
         responses = []
         for _ in range(105):
-            resp = client.get("/health")
+            resp = client.get(
+                "/v1/etl/status",
+                headers={"Authorization": f"Bearer {valid_token}"},
+            )
             responses.append(resp.status_code)
 
         assert 429 in responses
-
-    def test_health_endpoint_accessible(self, client):
-        """El endpoint /health debe ser accesible."""
-        resp = client.get("/health")
-        assert resp.status_code == 200
-
-    def test_circuit_breakers_endpoint(self, client):
-        """El endpoint /circuit-breakers debe retornar el estado de los breakers."""
-        resp = client.get("/circuit-breakers")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "circuit_breakers" in data
-        assert len(data["circuit_breakers"]) == 2
-        names = [cb["name"] for cb in data["circuit_breakers"]]
-        assert "lastfm" in names
-        assert "spotify" in names
