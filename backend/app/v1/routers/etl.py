@@ -9,7 +9,6 @@ description: Router del pipeline ETL. Expone POST /run (ejecuta Extract→Transf
 
 import logging
 import time
-import json
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -28,25 +27,10 @@ router = APIRouter(prefix="/etl", tags=["etl"])
 bearer_scheme = HTTPBearer()
 
 
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> DimUsers:
-    """
-    Dependencia FastAPI: valida el JWT Bearer y retorna el registro DimUsers.
-
-    Args:
-        credentials (HTTPAuthorizationCredentials): Token Bearer extraído del header Authorization.
-        db (Session): Sesión de SQLAlchemy inyectada por get_db.
-
-    Returns:
-        DimUsers: Instancia ORM del usuario autenticado.
-
-    Raises:
-        HTTPException: 401 si el token es inválido, expirado o el usuario no existe en BD.
-    """
     try:
         payload = AuthService.verify_jwt_token(credentials.credentials)
         spotify_id: str = payload.get("sub")
@@ -69,22 +53,9 @@ def run_etl(
 ):
     """
     Ejecuta el pipeline ETL completo: Extract → Transform → Load.
-
-    Usa el access token almacenado del usuario para llamar a Spotify API.
-    La sincronización es incremental: usa cursor_next_ms del último audit exitoso
-    como parámetro `after` en recently_played para no reprocesar historial antiguo.
-
-    Args:
-        current_user (DimUsers): Usuario autenticado via JWT; su access token se usa para Spotify.
-        db (Session): Sesión de SQLAlchemy.
-
-    Returns:
-        dict: { status: 'success'|'error', message, logs: [str] } con log detallado de la ejecución.
     """
     logger.info(f"Iniciando ETL para {current_user.spotify_id}")
 
-    # Renovar el access token antes de cada ETL para evitar 401s en sesiones
-    # inactivas >1 hora (Spotify expira los tokens en 3600 segundos).
     access_token = current_user.spotify_access_token
     if current_user.spotify_refresh_token:
         try:
@@ -177,7 +148,6 @@ def run_etl(
 
     except Exception as e:
         logger.error(f"Error en ETL: {e}", exc_info=True)
-
         duration_ms = int((time.time() - t0) * 1000)
         audit.status = "error"
         audit.finished_at = datetime.utcnow()
@@ -199,23 +169,25 @@ def get_etl_status(
 ):
     """
     Obtiene el estado actual del DWH y las últimas 5 ejecuciones ETL del usuario.
-
-    Args:
-        current_user (DimUsers): Usuario autenticado via JWT.
-        db (Session): Sesión de SQLAlchemy.
-
-    Returns:
-        dict: { tables: [{table_name, record_count, status}], recent_runs: [{id, started_at,
-               duration_seconds, records_extracted, records_loaded, status, error_message}] }
     """
     logger.info(f"Obteniendo estado ETL para {current_user.spotify_id}")
 
     tables = []
 
+    # Última sincronización exitosa
+    last_sync = None
+    last_successful_audit = db.query(EtlAudit).filter_by(
+        spotify_user_id=current_user.spotify_id,
+        status="success"
+    ).order_by(desc(EtlAudit.finished_at)).first()
+    if last_successful_audit and last_successful_audit.finished_at:
+        last_sync = last_successful_audit.finished_at.isoformat() + "+00:00"
+
     artist_count = db.query(func.count(DimArtists.artist_id)).scalar() or 0
     tables.append({
         "table_name": "dim_artists",
         "record_count": artist_count,
+        "last_sync": last_sync,
         "status": "loaded" if artist_count > 0 else "empty",
     })
 
@@ -223,6 +195,7 @@ def get_etl_status(
     tables.append({
         "table_name": "dim_tracks",
         "record_count": track_count,
+        "last_sync": last_sync,
         "status": "loaded" if track_count > 0 else "empty",
     })
 
@@ -234,6 +207,7 @@ def get_etl_status(
     tables.append({
         "table_name": "fact_listening_history",
         "record_count": history_count,
+        "last_sync": last_sync,
         "status": "loaded" if history_count > 0 else "empty",
     })
 
@@ -272,16 +246,6 @@ def get_etl_history(
 ):
     """
     Historial paginado de ejecuciones ETL del usuario con filtro opcional por estado.
-
-    Args:
-        status_filter (Optional[str]): Filtro por estado: 'success', 'error' o 'running'.
-        limit (int): Número máximo de registros a retornar (1-100, default 20).
-        offset (int): Índice de inicio para paginación (default 0).
-        current_user (DimUsers): Usuario autenticado via JWT.
-        db (Session): Sesión de SQLAlchemy.
-
-    Returns:
-        dict: { runs: [EtlAudit serializado], total, limit, offset, has_more }
     """
     logger.info(f"Obteniendo historial ETL para {current_user.spotify_id}")
 
@@ -291,7 +255,6 @@ def get_etl_history(
         query = query.filter(EtlAudit.status == status_filter)
 
     total = query.count()
-
     audits = query.order_by(desc(EtlAudit.started_at)).offset(offset).limit(limit).all()
 
     runs = [
@@ -327,19 +290,6 @@ def get_etl_run_tracks(
 ):
     """
     Retorna las canciones insertadas en dim_tracks durante una ejecución ETL específica.
-
-    Usa el rango started_at → finished_at del audit para filtrar por loaded_at en dim_tracks.
-
-    Args:
-        run_id (int): audit_id de la ejecución ETL.
-        current_user (DimUsers): Usuario autenticado via JWT.
-        db (Session): Sesión de SQLAlchemy.
-
-    Returns:
-        dict: { tracks: [{name, artist_name, album_name, album_image_url, duration_ms, popularity}], total }
-
-    Raises:
-        HTTPException: 404 si el run_id no existe o no pertenece al usuario.
     """
     audit = db.query(EtlAudit).filter_by(
         audit_id=run_id,
