@@ -77,8 +77,6 @@ def callback(code: str, state: str, db: Session = Depends(get_db)):
         )
 
     code_verifier = pkce_session.verifier
-    db.delete(pkce_session)
-    db.commit()
 
     # Intercambiar code por token de Spotify
     try:
@@ -88,10 +86,18 @@ def callback(code: str, state: str, db: Session = Depends(get_db)):
         logger.info("Access token obtenido de Spotify")
     except Exception as e:
         logger.error(f"Error intercambiando code: {e}")
+        # No eliminar la sesión PKCE — el code ya fue consumido por Spotify,
+        # así que el state no puede reutilizarse de todos modos.
+        db.delete(pkce_session)
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Error obteniendo token de Spotify",
         )
+
+    # El code ya fue usado; eliminar la sesión PKCE ahora que tenemos el token.
+    db.delete(pkce_session)
+    db.commit()
 
     # ETL: extraer, transformar y cargar usuario
     try:
@@ -102,9 +108,11 @@ def callback(code: str, state: str, db: Session = Depends(get_db)):
         logger.info(f"Usuario cargado/actualizado: {spotify_id}")
     except Exception as e:
         logger.error(f"Error cargando usuario: {e}")
+        # 403 = usuario no registrado como test user en Spotify Developer Dashboard
+        detail = "Usuario no autorizado en la aplicación de Spotify" if "403" in str(e) else "Error procesando datos del usuario"
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error procesando datos del usuario",
+            status_code=status.HTTP_403_FORBIDDEN if "403" in str(e) else status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=detail,
         )
 
     # Crear JWT usando AuthService (compatible con verify_jwt_token en todos los routers)

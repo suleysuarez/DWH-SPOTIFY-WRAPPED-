@@ -9,8 +9,7 @@ description: Router del pipeline ETL. Expone POST /run (ejecuta Extract→Transf
 
 import logging
 import time
-import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -103,7 +102,7 @@ def run_etl(
     audit = EtlAudit(
         spotify_user_id=current_user.spotify_id,
         status="running",
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(timezone.utc),
     )
     db.add(audit)
     db.commit()
@@ -140,21 +139,25 @@ def run_etl(
         logs.append("Cargando datos en DWH...")
         EtlService.load_user(db, user_transformed, current_user.spotify_access_token, current_user.spotify_refresh_token)
         artists_new, artists_skipped = EtlService.load_artists(db, artists_transformed)
+        all_artist_ids = [r[0] for r in db.query(DimArtists.spotify_id).all()]
+        enriched = EtlService.enrich_artists_from_spotify(db, all_artist_ids, access_token)
+        if enriched:
+            logs.append(f"Artistas enriquecidos con datos reales de Spotify: {enriched}")
         tracks_new, tracks_skipped = EtlService.load_tracks(db, tracks_transformed)
         history_new, history_skipped = EtlService.load_history(db, current_user.spotify_id, history_transformed)
 
+        data_updated = EtlService.backfill_artist_data(db, spotify_token=access_token)
+        if data_updated:
+            logs.append(f"Artists enriched via Spotify: {data_updated} stubs updated")
         genres_updated = EtlService.backfill_artist_genres(db)
         if genres_updated:
             logs.append(f"Genres enriched via Last.fm: {genres_updated} artists updated")
-        stats_updated = EtlService.backfill_artist_stats(db)
-        if stats_updated:
-            logs.append(f"Artist stats enriched via Last.fm: {stats_updated} artists updated")
 
         logs.append(f"Cargado: {artists_new} artistas nuevos, {tracks_new} canciones nuevas, {history_new} historial nuevo")
 
         duration_ms = int((time.time() - t0) * 1000)
         audit.status = "success"
-        audit.finished_at = datetime.utcnow()
+        audit.finished_at = datetime.now(timezone.utc)
         audit.duration_ms = duration_ms
         audit.users_new = 1
         audit.artists_new = artists_new
@@ -180,7 +183,7 @@ def run_etl(
 
         duration_ms = int((time.time() - t0) * 1000)
         audit.status = "error"
-        audit.finished_at = datetime.utcnow()
+        audit.finished_at = datetime.now(timezone.utc)
         audit.duration_ms = duration_ms
         audit.error_message = str(e)
         db.commit()

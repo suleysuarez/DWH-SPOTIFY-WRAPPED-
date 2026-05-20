@@ -96,9 +96,6 @@ class EtlService:
         response = SpotifyClient.get_top_artists(token, limit=50)
         artists = response.get("items", [])
         logger.info(f"Artistas extraidos: {len(artists)}")
-        if artists:
-            a = artists[0]
-            logger.info(f"[DEBUG] Primer artista crudo — name={a.get('name')} popularity={a.get('popularity')} followers={a.get('followers')} genres={a.get('genres')}")
         return artists
 
     @staticmethod
@@ -316,41 +313,92 @@ class EtlService:
         return updated
 
     @staticmethod
-    def backfill_artist_stats(db: Session) -> int:
+    def backfill_artist_data(db: Session, spotify_token: Optional[str] = None) -> int:
         """
-        Llena popularity y followers_count para todos los artistas con NULL.
-        Fuente 1: Last.fm (listeners → followers_count, playcount → popularity).
-        Fuente 2 (fallback popularity): play_count normalizado desde fact_listening_history.
-        Fuente 3 (fallback followers_count): 0 si no hay otra fuente.
+        Enriquece todos los artistas stub con datos reales de Spotify.
+
+        Un artista es stub si le falta image_url, popularity o followers_count.
+        image_url IS NULL es el indicador más confiable: los top-50 de Spotify
+        siempre traen imagen; los creados desde historial/tracks nunca la tienen.
+
+        Fuentes por prioridad:
+          1. Spotify GET /v1/artists?ids=...  (popularity, followers, image, genres)
+          2. Last.fm                          (fallback géneros y listeners)
+          3. play_count proporcional          (último recurso popularity/followers)
         """
-        from sqlalchemy import func as sa_func
-        artists = db.query(DimArtists).filter(
-            (DimArtists.popularity.is_(None)) | (DimArtists.followers_count.is_(None))
+        import math
+        from sqlalchemy import func as sa_func, or_
+
+        stubs = db.query(DimArtists).filter(
+            or_(
+                DimArtists.image_url.is_(None),
+                DimArtists.popularity.is_(None),
+                DimArtists.followers_count.is_(None),
+            )
         ).all()
-        if not artists:
+
+        if not stubs:
             return 0
 
-        # --- Last.fm en paralelo ---
-        lastfm_results: Dict[str, Dict[str, Optional[int]]] = {}
-        if settings.LASTFM_API_KEY:
-            def fetch_stats(name: str) -> Dict[str, Optional[int]]:
+        # --- Fuente 1: Spotify batch ---
+        spotify_data: Dict[str, Dict] = {}
+        if spotify_token or (settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET):
+            ids = [a.spotify_id for a in stubs]
+            raw_spotify = None
+            # Intentar con user token primero
+            if spotify_token:
+                try:
+                    raw_spotify = SpotifyClient.get_artists(spotify_token, ids)
+                    logger.info(f"Spotify (user token) enriqueció stubs")
+                except Exception as e:
+                    logger.warning(f"Spotify backfill con user token falló: {e}")
+            # Fallback: Client Credentials si user token falló o no hay token
+            if raw_spotify is None and settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET:
+                try:
+                    cc_token = SpotifyClient.get_client_credentials_token(
+                        settings.SPOTIFY_CLIENT_ID,
+                        settings.SPOTIFY_CLIENT_SECRET,
+                    )
+                    raw_spotify = SpotifyClient.get_artists(cc_token, ids)
+                    logger.info("Spotify (CC token) usado como fallback para backfill de stubs")
+                except Exception as e:
+                    logger.warning(f"Spotify backfill CC token también falló: {e}")
+                    raw_spotify = []
+            for item in (raw_spotify or []):
+                if not item:
+                    continue
+                images = item.get("images") or []
+                spotify_data[item["id"]] = {
+                    "popularity": item.get("popularity"),
+                    "followers": (item.get("followers") or {}).get("total"),
+                    "image_url": images[0]["url"] if images else None,
+                    "genres": item.get("genres") or [],
+                }
+            logger.info(f"Spotify enriqueció {len(spotify_data)}/{len(stubs)} stubs")
+
+        # --- Fuente 2: Last.fm (géneros y listeners) ---
+        lastfm_data: Dict[str, Dict] = {}
+        needs_lastfm = [
+            a for a in stubs
+            if not (spotify_data.get(a.spotify_id, {}).get("genres"))
+            or not (spotify_data.get(a.spotify_id, {}).get("followers"))
+        ]
+        if settings.LASTFM_API_KEY and needs_lastfm:
+            def _fetch_lfm(name: str) -> Dict:
                 return {
+                    "genres": EtlService.fetch_lastfm_genres(name),
                     "listeners": EtlService.fetch_lastfm_listeners(name),
-                    "playcount": EtlService.fetch_lastfm_playcount(name),
                 }
             with ThreadPoolExecutor(max_workers=10) as executor:
-                future_to_name = {
-                    executor.submit(fetch_stats, a.name): a.name
-                    for a in artists
-                }
-                for future in as_completed(future_to_name):
-                    name = future_to_name[future]
+                fut_map = {executor.submit(_fetch_lfm, a.name): a.name for a in needs_lastfm}
+                for fut in as_completed(fut_map):
+                    name = fut_map[fut]
                     try:
-                        lastfm_results[name] = future.result()
+                        lastfm_data[name] = fut.result()
                     except Exception:
-                        lastfm_results[name] = {"listeners": None, "playcount": None}
+                        lastfm_data[name] = {"genres": [], "listeners": None}
 
-        # --- Fallback popularity: play_count normalizado desde historial ---
+        # --- Fuente 3: play_count proporcional (último recurso) ---
         play_counts = dict(
             db.query(DimArtists.artist_id, sa_func.count(FactListeningHistory.id))
             .join(FactListeningHistory, FactListeningHistory.artist_id == DimArtists.artist_id)
@@ -360,27 +408,101 @@ class EtlService:
         max_plays = max(play_counts.values(), default=1)
 
         updated = 0
-        for artist in artists:
-            stats = lastfm_results.get(artist.name, {})
+        for artist in stubs:
+            sp = spotify_data.get(artist.spotify_id, {})
+            lfm = lastfm_data.get(artist.name, {})
             plays = play_counts.get(artist.artist_id, 1)
 
-            if artist.popularity is None:
-                # Siempre usamos el historial propio normalizado (1-100); es más fiel
-                # a la relevancia personal que el playcount global de Last.fm.
-                artist.popularity = max(1, round(plays * 100 / max_plays))
+            # popularity: Spotify → log-scale play_count
+            if artist.popularity is None or artist.image_url is None:
+                if sp.get("popularity") is not None:
+                    artist.popularity = sp["popularity"]
+                elif artist.popularity is None:
+                    log_plays = math.log1p(plays)
+                    log_max = math.log1p(max_plays)
+                    artist.popularity = max(10, round(log_plays * 100 / log_max))
 
-            if artist.followers_count is None:
-                estimated = max(1, plays * 500)
-                lastfm_listeners = stats.get("listeners") or 0
-                # Last.fm puede tener datos desactualizados/bajos para artistas regionales;
-                # usamos el mayor entre su valor y nuestro estimado proporcional.
-                artist.followers_count = max(estimated, lastfm_listeners)
+            # followers_count: Spotify → Last.fm → estimado
+            if artist.followers_count is None or artist.image_url is None:
+                if sp.get("followers") is not None:
+                    artist.followers_count = sp["followers"]
+                elif artist.followers_count is None:
+                    listeners = lfm.get("listeners") or 0
+                    artist.followers_count = max(listeners, max(1, plays * 500))
+
+            # image_url: Spotify (solo si está disponible)
+            if artist.image_url is None and sp.get("image_url"):
+                artist.image_url = sp["image_url"]
+
+            # genres: Spotify → Last.fm → sentinel
+            if not artist.genres or artist.genres == [""]:
+                genres = sp.get("genres") or lfm.get("genres") or []
+                artist.genres = genres if genres else [""]
+                flag_modified(artist, "genres")
 
             updated += 1
 
-        if artists:
+        if stubs:
             db.commit()
-        logger.info(f"[LASTFM] Backfill stats: {updated}/{len(artists)} artistas actualizados")
+        logger.info(f"Backfill artistas: {updated}/{len(stubs)} enriquecidos")
+        return updated
+
+    @staticmethod
+    def enrich_artists_from_spotify(db: Session, spotify_ids: List[str], spotify_token: str) -> int:
+        """
+        Llama a GET /v1/artists?ids=... y actualiza popularity, followers_count,
+        image_url y genres para todos los artistas dados.
+
+        Usa el user token primero; si falla (ej. 403 en modo dev de Spotify para
+        endpoints de catálogo), reintenta con Client Credentials token que sí puede
+        acceder a /v1/artists sin restricciones de modo dev.
+        """
+        if not spotify_ids:
+            return 0
+
+        raw = None
+        token_used = "user"
+        try:
+            raw = SpotifyClient.get_artists(spotify_token, spotify_ids)
+        except Exception as e:
+            logger.warning(f"enrich_artists_from_spotify con user token falló: {e}")
+            # Fallback: Client Credentials para endpoints de catálogo
+            if settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET:
+                try:
+                    cc_token = SpotifyClient.get_client_credentials_token(
+                        settings.SPOTIFY_CLIENT_ID,
+                        settings.SPOTIFY_CLIENT_SECRET,
+                    )
+                    raw = SpotifyClient.get_artists(cc_token, spotify_ids)
+                    token_used = "client_credentials"
+                    logger.info("Client Credentials token usado como fallback para /v1/artists")
+                except Exception as e2:
+                    logger.warning(f"enrich_artists_from_spotify CC token también falló: {e2}")
+                    return 0
+            else:
+                return 0
+
+        updated = 0
+        for item in (raw or []):
+            if not item:
+                continue
+            artist = db.query(DimArtists).filter_by(spotify_id=item["id"]).first()
+            if not artist:
+                continue
+            images = item.get("images") or []
+            artist.popularity = item.get("popularity")
+            artist.followers_count = (item.get("followers") or {}).get("total")
+            if images:
+                artist.image_url = images[0]["url"]
+            genres = item.get("genres") or []
+            if genres:
+                artist.genres = genres
+                flag_modified(artist, "genres")
+            updated += 1
+
+        if updated:
+            db.commit()
+        logger.info(f"enrich_artists_from_spotify ({token_used}): {updated}/{len(spotify_ids)} artistas actualizados")
         return updated
 
     # ============ LOAD ============
@@ -451,14 +573,6 @@ class EtlService:
                     existing.popularity = artist["popularity"]
                 if artist.get("followers_count") is not None:
                     existing.followers_count = artist["followers_count"]
-                if existing.followers_count is None:  # ← agrega esto
-                    listeners = EtlService.fetch_lastfm_listeners(existing.name)
-                    if listeners:
-                        existing.followers_count = listeners
-                if existing.popularity is None:
-                    playcount = EtlService.fetch_lastfm_playcount(existing.name)
-                    if playcount:
-                        existing.popularity = playcount
                 if artist.get("image_url"):
                     existing.image_url = artist["image_url"]
                 updated_count += 1
@@ -513,19 +627,7 @@ class EtlService:
                     if artist:
                         existing.artist_id = artist.artist_id
                         logger.info(f"Reparado artist_id para track {track['spotify_id']}")
-                if existing.popularity is None:
-                    artist_name = None
-                    if existing.artist_id:
-                        artist = db.query(DimArtists).filter_by(artist_id=existing.artist_id).first()
-                        artist_name = artist.name if artist else None
-                    if artist_name:
-                        try:
-                            playcount = EtlService.fetch_lastfm_track_playcount(existing.name, artist_name)
-                            if playcount:
-                                existing.popularity = playcount
-                        except Exception as e:
-                            logger.warning(f"Error playcount track {existing.name}: {e}")
-                    updated_count += 1
+                updated_count += 1
         db.commit()
         logger.info(f"Canciones cargadas: {new_count} nuevas, {updated_count} actualizadas")
         return new_count, updated_count

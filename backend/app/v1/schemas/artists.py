@@ -64,7 +64,7 @@ class ArtistResponse(BaseModel):
                 "id": spotify_id,
                 "name": getattr(data, "name", ""),
                 "popularity": getattr(data, "popularity", None),
-                "genres": getattr(data, "genres", []) or [],
+                "genres": [g for g in (getattr(data, "genres", []) or []) if g],
                 "images": images,
                 "external_urls": {
                     "spotify": f"https://open.spotify.com/artist/{spotify_id}"

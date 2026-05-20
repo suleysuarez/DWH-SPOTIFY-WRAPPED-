@@ -7,6 +7,7 @@ description: Cliente HTTP estático para la Spotify Web API. Consume /me, /me/to
              /me/top/tracks y /me/player/recently-played para el pipeline ETL.
 """
 
+import base64
 import requests
 import logging
 from typing import Dict, Any, Optional
@@ -49,25 +50,49 @@ class SpotifyClient:
     @staticmethod
     def refresh_access_token(refresh_token: str, client_id: str, client_secret: str) -> Dict[str, Any]:
         """
-        Renueva el access token usando refresh token.
+        Renueva el access token usando refresh token (PKCE flow).
 
         Args:
             refresh_token (str): Refresh token del usuario.
             client_id (str): Client ID de la aplicación.
-            client_secret (str): Client Secret de la aplicación.
+            client_secret (str): Client Secret (no se envía — PKCE no lo requiere y causa 400).
 
         Returns:
             Dict[str, Any]: Dict con nuevo access_token y expires_in.
         """
+        # PKCE flow: client_secret NO debe enviarse; incluirlo causa 400 Bad Request.
         payload = {
             "client_id": client_id,
-            "client_secret": client_secret,
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
         }
         response = requests.post(f"{SpotifyClient.AUTH_URL}/api/token", data=payload)
         response.raise_for_status()
         return response.json()
+
+    @staticmethod
+    def get_client_credentials_token(client_id: str, client_secret: str) -> str:
+        """
+        Obtiene un token de acceso via Client Credentials flow (sin usuario).
+
+        Necesario para endpoints de catálogo como GET /v1/artists?ids=... que
+        devuelven 403 con tokens de usuario PKCE en modo desarrollo de Spotify.
+
+        Args:
+            client_id (str): Client ID de la aplicación.
+            client_secret (str): Client Secret de la aplicación.
+
+        Returns:
+            str: Access token de Client Credentials.
+        """
+        credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+        response = requests.post(
+            f"{SpotifyClient.AUTH_URL}/api/token",
+            headers={"Authorization": f"Basic {credentials}"},
+            data={"grant_type": "client_credentials"},
+        )
+        response.raise_for_status()
+        return response.json()["access_token"]
 
     @staticmethod
     def get_current_user(token: str) -> Dict[str, Any]:
@@ -132,6 +157,25 @@ class SpotifyClient:
         )
         response.raise_for_status()
         return response.json()
+
+    @staticmethod
+    def get_artists(token: str, artist_ids: list) -> list:
+        """
+        Obtiene datos completos de hasta 50 artistas por ID (incluye popularity real).
+        Usa GET /v1/artists?ids=... que siempre retorna popularity independiente del modo.
+        """
+        headers = {"Authorization": f"Bearer {token}"}
+        results = []
+        for i in range(0, len(artist_ids), 50):
+            batch = artist_ids[i:i + 50]
+            response = requests.get(
+                f"{SpotifyClient.BASE_URL}/artists",
+                headers=headers,
+                params={"ids": ",".join(batch)},
+            )
+            response.raise_for_status()
+            results.extend(response.json().get("artists") or [])
+        return results
 
     @staticmethod
     def get_recently_played(token: str, limit: int = 50, after: Optional[str] = None) -> Dict[str, Any]:
