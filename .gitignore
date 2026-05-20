@@ -54,3 +54,6 @@ coverage/
 
 
 
+
+# Claude Code (configuración local)
+.claude/
