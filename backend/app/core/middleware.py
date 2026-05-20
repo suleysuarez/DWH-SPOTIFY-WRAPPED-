@@ -10,6 +10,7 @@ description: Middlewares personalizados para FastAPI.
                en memoria (suitable para desarrollo; usar Redis en producción).
 """
 
+import os
 import time
 import logging
 from collections import defaultdict
@@ -54,6 +55,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     EXEMPT_PATHS = {"/", "/health", "/docs", "/openapi.json", "/redoc"}
+    _instances: list["RateLimitMiddleware"] = []
 
     def __init__(self, app, max_requests: int = 100, window_seconds: int = 60):
         super().__init__(app)
@@ -61,6 +63,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = window_seconds
         # {ip: [timestamp, timestamp, ...]}
         self._requests: dict = defaultdict(list)
+        RateLimitMiddleware._instances.append(self)
+
+    @classmethod
+    def reset_counters(cls) -> None:
+        """Limpia contadores en memoria (aislamiento entre tests de pytest)."""
+        for instance in cls._instances:
+            instance._requests.clear()
+
+    @staticmethod
+    def _is_disabled() -> bool:
+        return os.getenv("DISABLE_RATE_LIMIT", "").lower() in ("1", "true", "yes")
 
     def _get_ip(self, request: Request) -> str:
         """Extrae la IP real considerando proxies."""
@@ -70,7 +83,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return request.client.host if request.client else "unknown"
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        if request.url.path in self.EXEMPT_PATHS:
+        if request.url.path in self.EXEMPT_PATHS or self._is_disabled():
             return await call_next(request)
 
         ip = self._get_ip(request)

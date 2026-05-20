@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.core.database import get_db
 from app.core.circuit_breaker import CircuitBreaker, CircuitBreakerError, CircuitState
+from app.core.middleware import RateLimitMiddleware
 from app.v1.services.auth_service import AuthService
 
 
@@ -323,14 +324,19 @@ class TestCircuitBreaker:
 
 class TestRateLimiting:
 
-    def test_rate_limit_blocks_after_max_requests(self, client, valid_token):
+    def test_rate_limit_blocks_after_max_requests(self, client, valid_token, monkeypatch):
         """Debe retornar 429 después de exceder el límite de requests (100/min por IP)."""
-        responses = []
-        for _ in range(105):
-            resp = client.get(
-                "/v1/etl/status",
-                headers={"Authorization": f"Bearer {valid_token}"},
-            )
-            responses.append(resp.status_code)
+        monkeypatch.setenv("DISABLE_RATE_LIMIT", "0")
+        RateLimitMiddleware.reset_counters()
+        try:
+            responses = []
+            for _ in range(105):
+                resp = client.get(
+                    "/v1/etl/status",
+                    headers={"Authorization": f"Bearer {valid_token}"},
+                )
+                responses.append(resp.status_code)
 
-        assert 429 in responses
+            assert 429 in responses
+        finally:
+            RateLimitMiddleware.reset_counters()
