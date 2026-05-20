@@ -1,288 +1,222 @@
-/**
- * Profile.tsx — Página de perfil del usuario autenticado.
- *
- * Carga los datos desde GET /v1/profile/me (fuente: dwh.dim_users).
- * La foto de perfil viene de `image_url` (extraída de Spotify en el login/ETL).
- * El enlace de Spotify se construye a partir de `spotify_id`.
- *
- * Autores: Suley Suárez y Jhonatan Vera
- */
-
-import AppLayout from "@/components/layout/AppLayout";
+import Navbar from "@/components/layout/Navbar";
 import { useApi } from "@/hooks/useApi";
 import { endpoints } from "@/lib/api";
 import type { UserProfile } from "@/types/user";
 import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import ErrorState from "@/components/ui/ErrorState";
-import { ExternalLink, MapPin, Mail, Users, Star, Crown, Eye, EyeOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import Tilt3D from "@/components/ui/Tilt3D";
+import { ExternalLink, Mail, Users, Crown, Star, Eye, EyeOff, MapPin } from "lucide-react";
 import { useState } from "react";
+import { motion } from "framer-motion";
+
+const EASE = [0.22, 1, 0.36, 1] as [number, number, number, number];
+const fadeUp = (i: number) => ({
+  initial: { opacity: 0, y: 22 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.55, ease: EASE, delay: 0.05 + i * 0.09 },
+});
 
 export default function Profile() {
   const { data: user, loading, error, refetch } = useApi<UserProfile>(endpoints.profile.me);
-  const [showSpotifyId, setShowSpotifyId] = useState(false);
+  const [showId, setShowId] = useState(false);
 
   const spotifyUrl = user?.spotify_id
     ? `https://open.spotify.com/user/${user.spotify_id}`
     : null;
 
   return (
-    <AppLayout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-white mb-1">Perfil</h1>
-        <p className="text-sm text-white/40">Tu cuenta de Spotify conectada.</p>
-      </div>
+    <div style={{ minHeight: "100vh", background: "#121212", display: "flex", flexDirection: "column" }}>
+      <Navbar />
 
-      {loading && (
-        <div className="space-y-5">
-          <SkeletonCard className="h-52" />
-          <div className="grid grid-cols-2 gap-4">
-            {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
-          </div>
-        </div>
-      )}
+      {/* ── Split layout: info izquierda | video derecha ── */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-      {!loading && error && (
-        <div className="glass-card rounded-xl p-8">
-          <ErrorState message={error} onRetry={refetch} />
-        </div>
-      )}
+        {/* ══ IZQUIERDA: contenido scrollable ══════════════════════════════════ */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "40px 48px" }}>
 
-      {!loading && !error && user && (
-        <div className="space-y-5">
+          {loading && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <SkeletonCard className="h-52" />
+              <SkeletonCard className="h-32" />
+              <SkeletonCard className="h-32" />
+            </div>
+          )}
 
-          {/* ── HERO ── */}
-          <div
-            className="relative overflow-hidden rounded-2xl p-8"
-            style={{
-              background: "linear-gradient(135deg, rgba(29,185,84,0.13) 0%, rgba(22,22,22,0.97) 55%, rgba(29,185,84,0.07) 100%)",
-              border: "1px solid rgba(29,185,84,0.18)",
-            }}
-          >
-            {/* Ambient glow blobs */}
-            <div
-              className="absolute pointer-events-none"
-              style={{
-                top: "-80px", left: "-80px",
-                width: 280, height: 280,
-                borderRadius: "50%",
-                background: "radial-gradient(circle, rgba(29,185,84,0.18) 0%, transparent 70%)",
-                filter: "blur(50px)",
-              }}
-            />
-            <div
-              className="absolute pointer-events-none"
-              style={{
-                bottom: "-60px", right: "-60px",
-                width: 200, height: 200,
-                borderRadius: "50%",
-                background: "radial-gradient(circle, rgba(29,185,84,0.10) 0%, transparent 70%)",
-                filter: "blur(40px)",
-              }}
-            />
+          {!loading && error && (
+            <div className="glass-card rounded-xl p-8">
+              <ErrorState message={error} onRetry={refetch} />
+            </div>
+          )}
 
-            <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-7">
+          {!loading && !error && user && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
 
-              {/* Avatar */}
-              <div className="relative flex-shrink-0">
-                <div
-                  className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden"
-                  style={{
-                    border: "3px solid #1DB954",
-                    boxShadow: "0 0 32px rgba(29,185,84,0.45), 0 0 70px rgba(29,185,84,0.18)",
-                  }}
-                >
-                  {user.image_url ? (
-                    <img
-                      src={user.image_url}
-                      alt={user.display_name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="w-full h-full flex items-center justify-center text-4xl font-black"
-                      style={{ background: "rgba(29,185,84,0.2)", color: "#1DB954" }}
-                    >
-                      {user.display_name?.charAt(0)?.toUpperCase() ?? "?"}
+              {/* ── Avatar + nombre ── */}
+              <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+                <motion.div {...fadeUp(0)} style={{ position: "relative", flexShrink: 0 }}>
+                  <div style={{
+                    width: 180, height: 180, borderRadius: "50%", overflow: "hidden",
+                    border: "4px solid #1DB954",
+                    boxShadow: "0 0 50px rgba(29,185,84,0.55), 0 0 100px rgba(29,185,84,0.2)",
+                  }}>
+                    {user.image_url ? (
+                      <img src={user.image_url} alt={user.display_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(29,185,84,0.15)", color: "#1DB954", fontSize: 48, fontWeight: 900 }}>
+                        {user.display_name?.charAt(0)?.toUpperCase() ?? "?"}
+                      </div>
+                    )}
+                  </div>
+                  {user.product === "premium" && (
+                    <div style={{ position: "absolute", bottom: 6, right: 6, width: 38, height: 38, borderRadius: "50%", background: "#FFD700", boxShadow: "0 2px 14px rgba(255,215,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Crown style={{ width: 15, height: 15, color: "#000" }} />
                     </div>
                   )}
-                </div>
+                </motion.div>
 
-                {user.product === "premium" && (
-                  <div
-                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center"
-                    style={{ background: "#FFD700", boxShadow: "0 2px 10px rgba(255,215,0,0.55)" }}
-                    title="Cuenta Premium"
-                  >
-                    <Crown className="w-4 h-4 text-black" />
-                  </div>
-                )}
-              </div>
-
-              {/* Info */}
-              <div className="flex flex-col items-center sm:items-start text-center sm:text-left flex-1 min-w-0">
-                <h2 className="text-2xl sm:text-3xl font-black text-white mb-3 truncate max-w-full">
-                  {user.display_name || "—"}
-                </h2>
-
-                <div className="flex flex-wrap justify-center sm:justify-start gap-2 mb-5">
-                  <span
-                    className="text-xs font-bold px-3 py-1.5 rounded-full"
-                    style={
-                      user.product === "premium"
-                        ? { background: "rgba(255,215,0,0.15)", color: "#FFD700", border: "1px solid rgba(255,215,0,0.3)" }
-                        : { background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" }
-                    }
-                  >
-                    {user.product === "premium" ? "✦ Premium" : "Free"}
-                  </span>
-                  {user.country && (
-                    <span
-                      className="text-xs font-medium px-3 py-1.5 rounded-full"
-                      style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}
-                    >
-                      {user.country}
+                <div>
+                  <motion.h1 {...fadeUp(1)} style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(1.8rem, 3vw, 2.8rem)", fontWeight: 900, color: "#fff", lineHeight: 1.1, marginBottom: 12 }}>
+                    {user.display_name || "—"}
+                  </motion.h1>
+                  <motion.div {...fadeUp(2)} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <span style={user.product === "premium"
+                      ? { fontSize: 12, fontWeight: 700, padding: "5px 14px", borderRadius: 9999, background: "rgba(255,215,0,0.15)", color: "#FFD700", border: "1px solid rgba(255,215,0,0.3)" }
+                      : { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 9999, background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.08)" }
+                    }>
+                      {user.product === "premium" ? "✦ Premium" : "Free"}
                     </span>
-                  )}
-                </div>
-
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black" style={{ color: "#1DB954" }}>
-                    {user.followers?.toLocaleString() ?? "0"}
-                  </span>
-                  <span className="text-sm text-white/40">seguidores en Spotify</span>
+                    {user.country && (
+                      <span style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 9999, background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 5 }}>
+                        <MapPin style={{ width: 10, height: 10 }} />{user.country}
+                      </span>
+                    )}
+                  </motion.div>
                 </div>
               </div>
 
-              {/* External link */}
+              {/* ── Seguidores destacado ── */}
+              <motion.div {...fadeUp(3)} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span style={{ fontFamily: "DM Sans, sans-serif", fontSize: 56, fontWeight: 900, color: "#1DB954", lineHeight: 1, textShadow: "0 0 50px rgba(29,185,84,0.6)" }}>
+                  {user.followers?.toLocaleString() ?? "0"}
+                </span>
+                <span style={{ fontSize: 15, color: "rgba(255,255,255,0.35)" }}>seguidores en Spotify</span>
+              </motion.div>
+
+              {/* ── Botón Spotify ── */}
               {spotifyUrl && (
-                <a
+                <motion.a
+                  {...fadeUp(4)}
                   href={spotifyUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="sm:ml-auto flex-shrink-0 self-start"
+                  whileHover={{ scale: 1.03, boxShadow: "0 0 40px rgba(29,185,84,0.5)" }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#1DB954", color: "#000", padding: "12px 28px", borderRadius: 9999, fontSize: 13, fontWeight: 900, textDecoration: "none", width: "fit-content", boxShadow: "0 4px 20px rgba(29,185,84,0.35)" }}
                 >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 border-white/10 text-white/60 hover:text-white hover:border-white/20"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Ver en Spotify
-                  </Button>
-                </a>
+                  <ExternalLink style={{ width: 14, height: 14 }} />
+                  Ver en Spotify
+                </motion.a>
               )}
-            </div>
-          </div>
 
-          {/* ── STATS GRID ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* ── Cards de datos ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
-            {/* Email */}
-            <div className="glass-card rounded-xl p-5">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: "rgba(29,185,84,0.12)" }}
-                >
-                  <Mail className="w-3.5 h-3.5" style={{ color: "#1DB954" }} />
-                </div>
-                <span className="text-xs text-white/40 font-medium">Email</span>
+                <motion.div {...fadeUp(5)}>
+                  <Tilt3D intensity={7} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "20px 22px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(29,185,84,0.12)" }}>
+                        <Mail style={{ width: 13, height: 13, color: "#1DB954" }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>Email</span>
+                    </div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>{user.email || "—"}</p>
+                  </Tilt3D>
+                </motion.div>
+
+                <motion.div {...fadeUp(6)}>
+                  <Tilt3D intensity={7} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "20px 22px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: user.product === "premium" ? "rgba(255,215,0,0.12)" : "rgba(29,185,84,0.12)" }}>
+                        {user.product === "premium"
+                          ? <Crown style={{ width: 13, height: 13, color: "#FFD700" }} />
+                          : <Star style={{ width: 13, height: 13, color: "#1DB954" }} />}
+                      </div>
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>Plan</span>
+                    </div>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: user.product === "premium" ? "#FFD700" : "rgba(255,255,255,0.55)" }}>
+                      {user.product === "premium" ? "✦ Premium" : "Free"}
+                    </p>
+                  </Tilt3D>
+                </motion.div>
+
+                <motion.div {...fadeUp(7)}>
+                  <Tilt3D intensity={7} style={{ background: "linear-gradient(135deg, rgba(29,185,84,0.1), rgba(29,185,84,0.03))", border: "1px solid rgba(29,185,84,0.22)", borderRadius: 16, padding: "20px 22px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(29,185,84,0.15)" }}>
+                        <Users style={{ width: 13, height: 13, color: "#1DB954" }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>Seguidores</span>
+                    </div>
+                    <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: 30, fontWeight: 900, color: "#1DB954", lineHeight: 1 }}>
+                      {user.followers?.toLocaleString() ?? "0"}
+                    </p>
+                  </Tilt3D>
+                </motion.div>
+
+                <motion.div {...fadeUp(8)}>
+                  <Tilt3D intensity={7} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "20px 22px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.06)" }}>
+                          <span style={{ fontSize: 9, fontWeight: 900, color: "rgba(255,255,255,0.3)" }}>ID</span>
+                        </div>
+                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>Spotify ID</span>
+                      </div>
+                      <button type="button" onClick={() => setShowId(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", display: "flex", padding: 0 }}>
+                        {showId ? <EyeOff style={{ width: 13, height: 13 }} /> : <Eye style={{ width: 13, height: 13 }} />}
+                      </button>
+                    </div>
+                    <p style={{ fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.4)", wordBreak: "break-all", lineHeight: 1.6 }}>
+                      {showId ? (user.spotify_id || "—") : "•".repeat(Math.min(user.spotify_id?.length ?? 8, 24))}
+                    </p>
+                  </Tilt3D>
+                </motion.div>
+
               </div>
-              <p className="text-sm font-semibold text-white truncate">{user.email || "—"}</p>
             </div>
-
-            {/* País */}
-            <div className="glass-card rounded-xl p-5">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: "rgba(29,185,84,0.12)" }}
-                >
-                  <MapPin className="w-3.5 h-3.5" style={{ color: "#1DB954" }} />
-                </div>
-                <span className="text-xs text-white/40 font-medium">País</span>
-              </div>
-              <p className="text-sm font-semibold text-white">{user.country || "—"}</p>
-            </div>
-
-            {/* Seguidores */}
-            <div
-              className="glass-card rounded-xl p-5"
-              style={{ border: "1px solid rgba(29,185,84,0.2)" }}
-            >
-              <div className="flex items-center gap-2.5 mb-3">
-                <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: "rgba(29,185,84,0.12)" }}
-                >
-                  <Users className="w-3.5 h-3.5" style={{ color: "#1DB954" }} />
-                </div>
-                <span className="text-xs text-white/40 font-medium">Seguidores</span>
-              </div>
-              <p className="text-2xl font-black" style={{ color: "#1DB954" }}>
-                {user.followers?.toLocaleString() ?? "—"}
-              </p>
-            </div>
-
-            {/* Plan */}
-            <div className="glass-card rounded-xl p-5">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{
-                    background: user.product === "premium"
-                      ? "rgba(255,215,0,0.12)"
-                      : "rgba(29,185,84,0.12)",
-                  }}
-                >
-                  {user.product === "premium"
-                    ? <Crown className="w-3.5 h-3.5" style={{ color: "#FFD700" }} />
-                    : <Star className="w-3.5 h-3.5" style={{ color: "#1DB954" }} />
-                  }
-                </div>
-                <span className="text-xs text-white/40 font-medium">Plan</span>
-              </div>
-              <p
-                className="text-sm font-bold"
-                style={{ color: user.product === "premium" ? "#FFD700" : "rgba(255,255,255,0.6)" }}
-              >
-                {user.product === "premium" ? "✦ Premium" : "Free"}
-              </p>
-            </div>
-
-            {/* Spotify ID */}
-            <div className="sm:col-span-2 glass-card rounded-xl p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: "rgba(255,255,255,0.06)" }}
-                  >
-                    <span className="text-xs font-bold text-white/30">ID</span>
-                  </div>
-                  <span className="text-xs text-white/40 font-medium">Spotify ID</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowSpotifyId((v) => !v)}
-                  className="flex items-center gap-1 text-xs text-white/30 hover:text-white/60 transition-colors"
-                  title={showSpotifyId ? "Ocultar" : "Mostrar"}
-                >
-                  {showSpotifyId
-                    ? <EyeOff className="w-3.5 h-3.5" />
-                    : <Eye className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-              <p className="text-xs font-mono text-white/50 break-all">
-                {showSpotifyId
-                  ? (user.spotify_id || "—")
-                  : "•".repeat(Math.min(user.spotify_id?.length ?? 8, 24))}
-              </p>
-            </div>
-          </div>
+          )}
         </div>
-      )}
-    </AppLayout>
+
+        {/* ══ DERECHA: video lateral fijo ══════════════════════════════════════ */}
+        {/* Panel width = video height × (1080/1920) so portrait video fills without cropping */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          style={{
+            flexShrink: 0,
+            width: "calc((100vh - 57px) * (1080 / 1920))",
+            position: "sticky",
+            top: 0,
+            height: "calc(100vh - 57px)",
+            overflow: "hidden",
+            background: "#121212",
+          }}
+        >
+          {/* Gradient fusion left edge */}
+          <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to right, #121212 0%, transparent 22%)" }} />
+          {/* Top/bottom fade */}
+          <div style={{ position: "absolute", inset: 0, zIndex: 2, background: "linear-gradient(to bottom, rgba(18,18,18,0.5) 0%, transparent 10%, transparent 90%, rgba(18,18,18,0.5) 100%)" }} />
+          <video
+            src="/videos/profile.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        </motion.div>
+
+      </div>
+    </div>
   );
 }
