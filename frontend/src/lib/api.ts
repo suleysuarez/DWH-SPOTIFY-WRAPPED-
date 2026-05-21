@@ -58,10 +58,17 @@ async function request<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  // Handle 401 → logout and redirect
+  // Handle 401 → logout and redirect to /401
   if (response.status === 401) {
     logout();
+    window.location.href = "/401";
     throw new ApiError(401, "Session expired. Please log in again.");
+  }
+
+  // Handle 5xx → redirect to /500
+  if (response.status >= 500) {
+    window.location.href = "/500";
+    throw new ApiError(response.status, `Server error ${response.status}`);
   }
 
   if (!response.ok) {

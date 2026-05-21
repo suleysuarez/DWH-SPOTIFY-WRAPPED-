@@ -99,10 +99,10 @@ export default function TopArtistsCard({
                   <div className="flex-1 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
                     <div
                       className="h-full rounded-full progress-spotify"
-                      style={{ width: `${artist.popularity}%` }}
+                      style={{ width: `${artist.popularity ?? 0}%` }}
                     />
                   </div>
-                  <span className="text-xs text-white/40 flex-shrink-0">{artist.popularity}</span>
+                  <span className="text-xs text-white/40 flex-shrink-0">{artist.popularity ?? '—'}</span>
                 </div>
               </div>
             </li>

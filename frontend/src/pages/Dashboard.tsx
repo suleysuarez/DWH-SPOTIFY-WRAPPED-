@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import AppLayout from "@/components/layout/AppLayout";
 import EmptyState from "@/components/ui/EmptyState";
 import PeakHourCard from "@/components/dashboard/PeakHourCard";
@@ -256,13 +256,137 @@ export default function Dashboard() {
   const totalHours     = Math.round(totalMinutes / 60);
   const totalArtists   = stats.data?.total_artists ?? 0;
   const totalPlays     = stats.data?.total_plays   ?? 0;
-  const topTrack       = stats.data?.top_track       ?? null;
-  const topTrackArtist = stats.data?.top_track_artist ?? null;
-  const topTrackPlays  = stats.data?.top_track_plays  ?? 0;
+  const topTrack            = stats.data?.top_track            ?? null;
+  const topTrackArtist      = stats.data?.top_track_artist      ?? null;
+  const topTrackPlays       = stats.data?.top_track_plays       ?? 0;
+  const topTrackImage       = stats.data?.top_track_image       ?? null;
+  const topTrackId          = stats.data?.top_track_id          ?? null;
+  const topTrackArtistImage = stats.data?.top_track_artist_image ?? null;
+  const topTrackArtistId    = stats.data?.top_track_artist_id   ?? null;
   const year = new Date().getFullYear();
+
+  const [expanded, setExpanded] = useState(false);
+  const placeholderRef = useRef<HTMLDivElement>(null);
+  const [playerRect, setPlayerRect] = useState({ top: 0, left: 0, width: 380, height: 152 });
+  const [rectReady, setRectReady] = useState(false);
+
+  useEffect(() => {
+    const sync = () => {
+      if (!placeholderRef.current) return;
+      const r = placeholderRef.current.getBoundingClientRect();
+      setPlayerRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      setRectReady(true);
+    };
+    const raf = requestAnimationFrame(sync);
+    window.addEventListener("scroll", sync, { passive: true });
+    window.addEventListener("resize", sync, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", sync);
+      window.removeEventListener("resize", sync);
+    };
+  }, [topTrack]);
+
+  useEffect(() => {
+    document.body.style.overflow = expanded ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [expanded]);
 
   return (
     <AppLayout>
+      {/* ── Reproductor Spotify fijo — siempre montado para preservar el audio ─ */}
+      {topTrackId && rectReady && (
+        <>
+          <AnimatePresence>
+            {expanded && (
+              <motion.div
+                key="player-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                onClick={() => setExpanded(false)}
+                style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
+              />
+            )}
+          </AnimatePresence>
+
+          <motion.div
+            animate={expanded ? {
+              x: (window.innerWidth  - 580) / 2,
+              y: (window.innerHeight - 352) / 2,
+              width:  580,
+              height: 352,
+            } : {
+              x: playerRect.left,
+              y: playerRect.top,
+              width:  playerRect.width,
+              height: playerRect.height,
+            }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            style={{ position: "fixed", top: 0, left: 0, zIndex: expanded ? 9999 : 22, overflow: "visible" }}
+          >
+            {/* Iframe — recortado al border-radius */}
+            <div style={{
+              position: "absolute", inset: 0,
+              borderRadius: expanded ? 20 : 14,
+              overflow: "hidden",
+              boxShadow: expanded
+                ? "0 0 80px rgba(29,185,84,0.4), 0 30px 100px rgba(0,0,0,0.8)"
+                : "0 0 28px rgba(29,185,84,0.22)",
+            }}>
+              <iframe
+                title={`Reproducir ${topTrack ?? ""} en Spotify`}
+                src={`https://open.spotify.com/embed/track/${topTrackId}?utm_source=generator&theme=0`}
+                width="100%"
+                height="100%"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                style={{ display: "block", border: "none" }}
+              />
+              <AnimatePresence>
+                {!expanded && (
+                  <motion.button
+                    key="expand-btn"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 0.9 }}
+                    exit={{ opacity: 0 }}
+                    type="button"
+                    onClick={() => setExpanded(true)}
+                    title="Expandir reproductor"
+                    style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.72)", border: "1px solid rgba(255,255,255,0.18)", color: "#fff", borderRadius: 7, padding: "6px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M1 4.5V1H4.5M7.5 1H11V4.5M11 7.5V11H7.5M4.5 11H1V7.5"/>
+                    </svg>
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Botón cerrar — fuera del overflow:hidden para sobresalir arriba */}
+            <AnimatePresence>
+              {expanded && (
+                <motion.button
+                  key="close-btn"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ delay: 0.22 }}
+                  type="button"
+                  onClick={() => setExpanded(false)}
+                  style={{ position: "absolute", top: -46, right: 0, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff", borderRadius: 9999, padding: "10px 12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  title="Cerrar reproductor"
+                >
+                  <svg width="14" height="14" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    <path d="M1 1l11 11M12 1L1 12"/>
+                  </svg>
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </>
+      )}
+
       {isDwhEmpty && (
         <div className="glass-card rounded-xl mb-6" style={{ border: "1px solid rgba(29,185,84,0.15)" }}>
           <EmptyState title="Tu DWH está vacío" description="Ve a la página ETL y sincroniza tus datos de Spotify." showEtlLink />
@@ -489,47 +613,104 @@ export default function Dashboard() {
 
         {/* ══ 06 CANCIÓN FAVORITA ══════════════════════════════════════════════ */}
         <PanelReveal delay={0.05}>
-          <div style={{ ...P, background: "linear-gradient(135deg,#0a0a0a 0%,#0d1520 50%,#0a0f0a 100%)", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{ ...P, background: "linear-gradient(135deg,#070d07 0%,#0d1a0d 45%,#0a0f1a 100%)", border: "1px solid rgba(29,185,84,0.2)" }}>
             <Stars />
-            <Num n="06" />
+            <Num n="06" color="rgba(29,185,84,0.4)" />
             <Note style={{ top: 60, left: "48%" }} />
-            <Glow color="rgba(29,185,84,0.12)" style={{ right: 40, top: 40, width: 400, height: 400 }} />
+            <Glow color="rgba(29,185,84,0.14)" style={{ left: -80, bottom: -80, width: 500, height: 500 }} />
+            <Glow color="rgba(130,80,255,0.08)" style={{ right: -40, top: -40, width: 400, height: 400 }} />
 
-            <div style={{ position: "relative", zIndex: 2, flex: "0 0 52%", paddingRight: 40 }}>
-              <h2 style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(2.5rem,4.5vw,4rem)", fontWeight: 900, color: "#fff", lineHeight: 1.05, marginBottom: 4 }}>Tu canción</h2>
-              <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(2rem,3.5vw,3rem)", fontWeight: 900, color: "#1DB954", marginBottom: 40 }}>favorita</p>
-
-              {stats.loading
-                ? <p style={{ color: "rgba(255,255,255,0.3)" }}>Cargando...</p>
-                : topTrack
-                  ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.6 }}
-                    >
-                      <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(1.8rem,3vw,2.8rem)", fontWeight: 900, color: "#fff", lineHeight: 1.2, marginBottom: 12, textShadow: "0 0 40px rgba(29,185,84,0.4)" }}>
-                        {topTrack}
+            {/* Columna izquierda: título + contador */}
+            <div style={{ position: "relative", zIndex: 2, flex: "0 0 28%", paddingRight: 32 }}>
+              <h2 style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(2.2rem,4vw,3.5rem)", fontWeight: 900, color: "#fff", lineHeight: 1.05, marginBottom: 4 }}>Tu canción</h2>
+              <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(1.8rem,3.2vw,2.8rem)", fontWeight: 900, color: "#1DB954", marginBottom: 28 }}>favorita</p>
+              {!stats.loading && topTrack && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                  style={{ display: "flex", flexDirection: "column", gap: 16 }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(29,185,84,0.08)", border: "1px solid rgba(29,185,84,0.18)", borderRadius: 12, padding: "12px 16px", width: "fit-content" }}>
+                    <span style={{ fontSize: 20 }}>🎵</span>
+                    <div>
+                      <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 2, letterSpacing: "0.08em", textTransform: "uppercase" }}>la pusiste</p>
+                      <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: 20, fontWeight: 900, color: "#1DB954", lineHeight: 1 }}>
+                        <AnimatedNumber value={topTrackPlays} /> veces
                       </p>
-                      <p style={{ fontSize: 18, color: "rgba(255,255,255,0.5)", marginBottom: 24 }}>{topTrackArtist}</p>
-                      <Tilt3D intensity={6} style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "rgba(29,185,84,0.1)", border: "1px solid rgba(29,185,84,0.25)", borderRadius: 12, padding: "12px 22px", cursor: "default" }}>
-                        <span style={{ fontSize: 24 }}>🎵</span>
-                        <div>
-                          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>la pusiste</p>
-                          <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: 20, fontWeight: 900, color: "#1DB954" }}>
-                            <AnimatedNumber value={topTrackPlays} /> veces
-                          </p>
-                        </div>
-                      </Tilt3D>
-                    </motion.div>
-                  )
-                  : <p style={{ color: "rgba(255,255,255,0.3)" }}>Sin datos aún. Ejecuta el ETL.</p>
-              }
+                    </div>
+                  </div>
+                  {topTrackId && (
+                    <motion.a
+                      href={`https://open.spotify.com/track/${topTrackId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      whileHover={{ scale: 1.04, boxShadow: "0 0 28px rgba(29,185,84,0.5)" }}
+                      whileTap={{ scale: 0.97 }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#1DB954", color: "#000", padding: "10px 20px", borderRadius: 9999, fontWeight: 900, fontSize: 12, textDecoration: "none", boxShadow: "0 0 20px rgba(29,185,84,0.35)", letterSpacing: "0.04em", width: "fit-content" }}
+                    >
+                      <img src="/images/logo_spotify.png" alt="" style={{ width: 14, height: 14, objectFit: "contain" }} />
+                      ABRIR EN SPOTIFY
+                    </motion.a>
+                  )}
+                </motion.div>
+              )}
+              {!stats.loading && !topTrack && (
+                <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 14 }}>Sin datos aún. Ejecuta el ETL.</p>
+              )}
             </div>
 
-            <div style={{ position: "absolute", right: 0, bottom: 0, top: 0, width: "44%", zIndex: 1 }}>
-              <img src="/images/img_06.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "bottom right", filter: "drop-shadow(0 0 60px rgba(29,185,84,0.3))", opacity: 0.85 }} />
+            {/* Tarjeta central glass: nombre + artista + embed */}
+            {!stats.loading && topTrack && (
+              <motion.div
+                initial={{ opacity: 0, y: 30, scale: 0.94 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
+                style={{
+                  position: "relative", zIndex: 2,
+                  flex: "0 0 auto",
+                  display: "flex", flexDirection: "column", gap: 14,
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                  borderRadius: 22,
+                  padding: "22px 24px 24px",
+                  backdropFilter: "blur(8px)",
+                  boxShadow: "0 8px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
+                  minWidth: 400,
+                }}
+              >
+                {/* Nombre canción */}
+                <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: 18, fontWeight: 900, color: "#fff", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 400 }}>
+                  {topTrack}
+                </p>
+
+                {/* Chip artista */}
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9999, padding: "5px 12px 5px 6px", width: "fit-content" }}>
+                  {topTrackArtistImage
+                    ? <img src={topTrackArtistImage} alt={topTrackArtist ?? ""} style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover", border: "1px solid rgba(255,255,255,0.15)" }} />
+                    : <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(29,185,84,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#1DB954", fontSize: 11 }}>♪</div>
+                  }
+                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: 600 }}>{topTrackArtist}</span>
+                </div>
+
+                {/* Placeholder del iframe fijo — reserva el espacio */}
+                {topTrackId && (
+                  <div
+                    ref={placeholderRef}
+                    style={{ width: 400, height: 152, borderRadius: 12, background: "rgba(29,185,84,0.03)", border: "1px solid rgba(29,185,84,0.08)" }}
+                  />
+                )}
+              </motion.div>
+            )}
+
+            {/* Video decorativo: cohete */}
+            <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, aspectRatio: "1 / 1", maxWidth: "42%", zIndex: 1, overflow: "hidden" }}>
+              <video autoPlay loop muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}>
+                <source src="/videos/cohete.mp4" type="video/mp4" />
+              </video>
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #070d07 0%, transparent 38%)" }} />
             </div>
           </div>
         </PanelReveal>

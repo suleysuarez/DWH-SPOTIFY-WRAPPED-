@@ -178,6 +178,25 @@ class SpotifyClient:
         return results
 
     @staticmethod
+    def get_tracks(token: str, track_ids: list) -> list:
+        """
+        Obtiene datos completos de hasta 50 canciones por ID (incluye album images).
+        Usa GET /v1/tracks?ids=... compatible con Client Credentials token.
+        """
+        headers = {"Authorization": f"Bearer {token}"}
+        results = []
+        for i in range(0, len(track_ids), 50):
+            batch = track_ids[i:i + 50]
+            response = requests.get(
+                f"{SpotifyClient.BASE_URL}/tracks",
+                headers=headers,
+                params={"ids": ",".join(batch)},
+            )
+            response.raise_for_status()
+            results.extend(response.json().get("tracks") or [])
+        return results
+
+    @staticmethod
     def get_recently_played(token: str, limit: int = 50, after: Optional[str] = None) -> Dict[str, Any]:
         """
         Obtiene historial de reproducción reciente.
