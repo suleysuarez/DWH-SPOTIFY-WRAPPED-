@@ -143,12 +143,18 @@ def run_etl(
         enriched = EtlService.enrich_artists_from_spotify(db, all_artist_ids, access_token)
         if enriched:
             logs.append(f"Artistas enriquecidos con datos reales de Spotify: {enriched}")
-        tracks_new, tracks_skipped = EtlService.load_tracks(db, tracks_transformed)
-        history_new, history_skipped = EtlService.load_history(db, current_user.spotify_id, history_transformed)
+        tracks_new, tracks_skipped, new_tracks_detail = EtlService.load_tracks(db, tracks_transformed)
+        history_new, history_skipped, new_history_detail = EtlService.load_history(db, current_user.spotify_id, history_transformed)
 
         data_updated = EtlService.backfill_artist_data(db, spotify_token=access_token)
         if data_updated:
             logs.append(f"Artists enriched via Spotify: {data_updated} stubs updated")
+        tracks_enriched = EtlService.backfill_track_images(db, spotify_token=access_token)
+        if tracks_enriched:
+            logs.append(f"Track images enriched via Spotify: {tracks_enriched} tracks updated")
+        pop_enriched = EtlService.backfill_track_popularity(db, spotify_token=access_token)
+        if pop_enriched:
+            logs.append(f"Track popularity enriched via Spotify: {pop_enriched} tracks updated")
         genres_updated = EtlService.backfill_artist_genres(db)
         if genres_updated:
             logs.append(f"Genres enriched via Last.fm: {genres_updated} artists updated")
@@ -176,6 +182,15 @@ def run_etl(
             "status": "success",
             "message": "ETL completado exitosamente",
             "logs": logs,
+            "run_id": audit.audit_id,
+            "summary": {
+                "tracks_new": tracks_new,
+                "tracks_updated": tracks_skipped,
+                "history_new": history_new,
+                "history_skipped": history_skipped,
+                "new_tracks": new_tracks_detail,
+                "new_history": new_history_detail[:30],
+            },
         }
 
     except Exception as e:

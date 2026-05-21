@@ -34,4 +34,8 @@ export interface QuickStats {
   top_track: string | null;
   top_track_artist: string | null;
   top_track_plays: number;
+  top_track_image?: string | null;
+  top_track_id?: string | null;
+  top_track_artist_image?: string | null;
+  top_track_artist_id?: string | null;
 }

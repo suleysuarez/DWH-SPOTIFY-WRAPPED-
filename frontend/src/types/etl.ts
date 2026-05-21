@@ -33,11 +33,36 @@ export interface EtlStatusResponse {
   recent_runs: EtlRun[];
 }
 
+export interface EtlTrackDetail {
+  name: string;
+  artist_name: string;
+  album_name?: string | null;
+  album_image_url?: string | null;
+  spotify_id?: string | null;
+}
+
+export interface EtlHistoryDetail {
+  track_name: string;
+  artist_name: string;
+  album_image_url?: string | null;
+  played_at: string;
+}
+
+export interface EtlRunSummary {
+  tracks_new: number;
+  tracks_updated: number;
+  history_new: number;
+  history_skipped: number;
+  new_tracks: EtlTrackDetail[];
+  new_history: EtlHistoryDetail[];
+}
+
 export interface EtlRunResponse {
-  run_id: string;
+  run_id?: string;
   status: "started" | "running" | "success" | "error";
   logs: string[];
   message?: string;
+  summary?: EtlRunSummary;
 }
 
 export interface EtlLogLine {

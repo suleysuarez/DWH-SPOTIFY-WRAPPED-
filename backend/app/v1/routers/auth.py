@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.models.models import PkceSessions
 from app.schemas.schemas import AuthLoginResponse
 from app.services.spotify_service import SpotifyService
-from app.services.etl_service import EtlService
+from app.v1.services.etl_service import EtlService
 from app.v1.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
