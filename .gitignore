@@ -216,3 +216,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Claude
+.claude/
+
+# Vite cache
+.vite/
+
+# Node
+node_modules/
+
+# Frontend build output
+frontend/dist/
+frontend/node_modules/
+
+# Misc
+patches/
+server/
+shared/
