@@ -16,6 +16,8 @@ os.environ.setdefault("JWT_SECRET", "test_jwt_secret_key_32chars_long!")
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost/test_db")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 os.environ.setdefault("ALLOW_HOSTS", "http://localhost:3000")
+# Evita que el test de rate limit (105 requests) bloquee el resto de la suite
+os.environ.setdefault("DISABLE_RATE_LIMIT", "1")
 
 import pytest
 from datetime import datetime
