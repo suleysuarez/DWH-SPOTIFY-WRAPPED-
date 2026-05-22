@@ -189,7 +189,7 @@ class TestEtlRun:
         mock_etl.load_user.return_value = "test_spotify_id"
         mock_etl.load_artists.return_value = (0, 0)
         mock_etl.load_tracks.return_value = (0, 0,[])
-        mock_etl.load_history.return_value = (0, 0,[])
+        mock_etl.load_history.return_value = (0, 0,[],[])
         mock_etl.backfill_artist_genres.return_value = 0
         mock_etl.backfill_artist_stats.return_value = 0
 
