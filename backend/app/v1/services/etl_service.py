@@ -14,7 +14,6 @@ from datetime import datetime
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.models.models import DimUsers, DimArtists, DimTracks, FactListeningHistory
 from app.v1.services.spotify_client import SpotifyClient
 from app.core.config import settings
@@ -514,59 +513,84 @@ class EtlService:
     @staticmethod
     def enrich_artists_from_spotify(db: Session, spotify_ids: List[str], spotify_token: str) -> int:
         """
-        Llama a GET /v1/artists?ids=... y actualiza popularity, followers_count,
-        image_url y genres para todos los artistas dados.
-
-        Usa el user token primero; si falla (ej. 403 en modo dev de Spotify para
-        endpoints de catálogo), reintenta con Client Credentials token que sí puede
-        acceder a /v1/artists sin restricciones de modo dev.
+        Enriquece artistas con datos de Spotify.
+        Intenta batch /v1/artists?ids=... primero; si devuelve 403 (restricción de
+        Development Mode) cae back a /v1/search por nombre (siempre disponible).
         """
         if not spotify_ids:
             return 0
 
-        raw = None
-        token_used = "user"
+        search_token = spotify_token
+        if settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET:
+            try:
+                search_token = SpotifyClient.get_client_credentials_token(
+                    settings.SPOTIFY_CLIENT_ID,
+                    settings.SPOTIFY_CLIENT_SECRET,
+                )
+            except Exception:
+                pass
+
+        # Intentar batch primero
+        raw_map: Dict[str, Dict] = {}
         try:
-            raw = SpotifyClient.get_artists(spotify_token, spotify_ids)
+            raw = SpotifyClient.get_artists(search_token, spotify_ids)
+            for item in (raw or []):
+                if item:
+                    raw_map[item["id"]] = item
+            logger.info(f"enrich_artists_from_spotify batch: {len(raw_map)}/{len(spotify_ids)}")
         except Exception as e:
-            logger.warning(f"enrich_artists_from_spotify con user token falló: {e}")
-            # Fallback: Client Credentials para endpoints de catálogo
-            if settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET:
+            logger.warning(f"enrich_artists_from_spotify batch falló ({e}), usando search por nombre")
+
+        # Fallback search para los que no se pudieron obtener por batch
+        missing = [sid for sid in spotify_ids if sid not in raw_map]
+        if missing:
+            artists_to_search = db.query(DimArtists).filter(
+                DimArtists.spotify_id.in_(missing)
+            ).all()
+            from concurrent.futures import ThreadPoolExecutor, as_completed as _ac
+            def _search(a) -> tuple:
                 try:
-                    cc_token = SpotifyClient.get_client_credentials_token(
-                        settings.SPOTIFY_CLIENT_ID,
-                        settings.SPOTIFY_CLIENT_SECRET,
-                    )
-                    raw = SpotifyClient.get_artists(cc_token, spotify_ids)
-                    token_used = "client_credentials"
-                    logger.info("Client Credentials token usado como fallback para /v1/artists")
-                except Exception as e2:
-                    logger.warning(f"enrich_artists_from_spotify CC token también falló: {e2}")
-                    return 0
-            else:
-                return 0
+                    result = SpotifyClient.search_artist(search_token, a.name)
+                    return a.spotify_id, result
+                except Exception:
+                    return a.spotify_id, None
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futs = {executor.submit(_search, a): a for a in artists_to_search}
+                for fut in _ac(futs):
+                    sid, result = fut.result()
+                    if result:
+                        raw_map[sid] = result
+            logger.info(f"enrich_artists_from_spotify search fallback: {len(raw_map)}/{len(spotify_ids)} total")
+
+        if not raw_map:
+            return 0
 
         updated = 0
-        for item in (raw or []):
+        for spotify_id in spotify_ids:
+            item = raw_map.get(spotify_id)
             if not item:
                 continue
-            artist = db.query(DimArtists).filter_by(spotify_id=item["id"]).first()
+            artist = db.query(DimArtists).filter_by(spotify_id=spotify_id).first()
             if not artist:
                 continue
             images = item.get("images") or []
-            artist.popularity = item.get("popularity")
-            artist.followers_count = (item.get("followers") or {}).get("total")
+            pop = item.get("popularity")
+            followers = (item.get("followers") or {}).get("total")
+            if pop is not None:
+                artist.popularity = pop
+            if followers is not None:
+                artist.followers_count = followers
             if images:
                 artist.image_url = images[0]["url"]
             genres = item.get("genres") or []
-            if genres:
+            if genres and (not artist.genres or artist.genres == [""]):
                 artist.genres = genres
                 flag_modified(artist, "genres")
             updated += 1
 
         if updated:
             db.commit()
-        logger.info(f"enrich_artists_from_spotify ({token_used}): {updated}/{len(spotify_ids)} artistas actualizados")
+        logger.info(f"enrich_artists_from_spotify: {updated}/{len(spotify_ids)} artistas actualizados")
         return updated
 
     @staticmethod
@@ -721,19 +745,22 @@ class EtlService:
                 artist["genres"] = incoming_genres
                 db.add(DimArtists(**artist))
                 new_count += 1
-            elif full_run:
-                incoming_genres = artist.get("genres") or []
-                if not incoming_genres:
-                    fetched = EtlService.fetch_lastfm_genres(artist["name"])
-                    incoming_genres = fetched if fetched else [""]
-                existing.genres = incoming_genres if incoming_genres else (existing.genres or [""])
-                flag_modified(existing, "genres")
+            else:
+                # Siempre actualizar campos de Spotify (no requieren Last.fm)
                 if artist.get("popularity") is not None:
                     existing.popularity = artist["popularity"]
                 if artist.get("followers_count") is not None:
                     existing.followers_count = artist["followers_count"]
                 if artist.get("image_url"):
                     existing.image_url = artist["image_url"]
+                # Géneros via Last.fm: solo en full_run
+                if full_run:
+                    incoming_genres = artist.get("genres") or []
+                    if not incoming_genres:
+                        fetched = EtlService.fetch_lastfm_genres(artist["name"])
+                        incoming_genres = fetched if fetched else [""]
+                    existing.genres = incoming_genres if incoming_genres else (existing.genres or [""])
+                    flag_modified(existing, "genres")
                 updated_count += 1
         db.commit()
         logger.info(f"Artistas cargados: {new_count} nuevos, {updated_count} actualizados")
@@ -771,8 +798,8 @@ class EtlService:
                 db.add(DimTracks(**track_data))
                 new_count += 1
                 new_tracks_detail.append({
-                    "name": track.get("name", ""),
-                    "artist_name": track.get("artist_name", ""),
+                    "name": track.get("name") or "",
+                    "artist_name": track.get("artist_name") or "",
                     "album_name": track.get("album_name"),
                     "album_image_url": track.get("album_image_url"),
                     "spotify_id": track.get("spotify_id"),
@@ -796,7 +823,7 @@ class EtlService:
         return new_count, updated_count, new_tracks_detail
 
     @staticmethod
-    def load_history(db: Session, spotify_user_id: str, history_data: List[Dict[str, Any]]) -> Tuple[int, int]:
+    def load_history(db: Session, spotify_user_id: str, history_data: List[Dict[str, Any]], spotify_token: Optional[str] = None) -> Tuple[int, int]:
         """
         Inserta registros de reproducción en fact_listening_history, deduplicando por (user_id, track_id, played_at).
 
@@ -812,10 +839,12 @@ class EtlService:
         new_count = 0
         skipped_count = 0
         new_history_detail: List[Dict[str, Any]] = []
+        new_catalog_from_history: List[Dict[str, Any]] = []
+        new_stub_artist_ids: List[str] = []
         user = db.query(DimUsers).filter_by(spotify_id=spotify_user_id).first()
         if not user:
             logger.error(f"Usuario no encontrado: {spotify_user_id}")
-            return 0, 0, []
+            return 0, 0, [], []
 
         for item in history_data:
             track = db.query(DimTracks).filter_by(
@@ -849,6 +878,7 @@ class EtlService:
                             )
                             db.add(artist)
                             db.flush()
+                            new_stub_artist_ids.append(spotify_artist_id)
 
                         track = DimTracks(
                             spotify_id=item["spotify_track_id"],
@@ -863,6 +893,13 @@ class EtlService:
                         db.add(track)
                         db.flush()
                         logger.info(f"Track creado desde historial: {track.name}")
+                        new_catalog_from_history.append({
+                            "name": item.get("track_name") or "",
+                            "artist_name": item.get("artist_name") or "",
+                            "album_name": item.get("album_name"),
+                            "album_image_url": item.get("album_image_url"),
+                            "spotify_id": item.get("spotify_track_id"),
+                        })
                 except Exception as e:
                     logger.warning(f"No se pudo crear track {item['spotify_track_id']}: {e}")
                     skipped_count += 1
@@ -883,12 +920,17 @@ class EtlService:
                 skipped_count += 1
                 continue
 
-            # ON CONFLICT DO NOTHING resuelve dos bugs a la vez:
-            # 1. Elimina la query de pre-chequeo (era N+1 consultas).
-            # 2. Si dos canciones llegan con el mismo played_at (timestamps repetidos
-            #    de Spotify), la segunda se ignora en vez de lanzar IntegrityError
-            #    y revertir TODOS los inserts del commit.
-            stmt = pg_insert(FactListeningHistory).values(
+            # Pre-chequeo de duplicado por (user_id, played_at)
+            existing_record = db.query(FactListeningHistory).filter_by(
+                user_id=user.user_id,
+                played_at=item["played_at"],
+            ).first()
+
+            if existing_record:
+                skipped_count += 1
+                continue
+
+            db.add(FactListeningHistory(
                 user_id=user.user_id,
                 track_id=track.track_id,
                 artist_id=artist_id,
@@ -896,24 +938,22 @@ class EtlService:
                 hour_of_day=item.get("hour_of_day"),
                 day_of_week=item.get("day_of_week"),
                 context_type=item.get("context_type"),
-            ).on_conflict_do_nothing(
-                index_elements=["user_id", "played_at"]
-            )
-            result = db.execute(stmt)
-            if result.rowcount > 0:
-                new_count += 1
-                new_history_detail.append({
-                    "track_name": item.get("track_name", ""),
-                    "artist_name": item.get("artist_name", ""),
-                    "album_image_url": item.get("album_image_url"),
-                    "played_at": item["played_at"].isoformat(),
-                })
-            else:
-                skipped_count += 1
+            ))
+            new_count += 1
+            new_history_detail.append({
+                "track_name": item.get("track_name", ""),
+                "artist_name": item.get("artist_name", ""),
+                "album_image_url": item.get("album_image_url"),
+                "played_at": item["played_at"].isoformat(),
+            })
+
+        if new_stub_artist_ids and spotify_token:
+            logger.info(f"Enriqueciendo {len(new_stub_artist_ids)} artistas stub desde Spotify...")
+            EtlService.enrich_artists_from_spotify(db, new_stub_artist_ids, spotify_token)
 
         db.commit()
         logger.info(f"Historial cargado: {new_count} nuevos, {skipped_count} saltados")
-        return new_count, skipped_count, new_history_detail
+        return new_count, skipped_count, new_history_detail, new_catalog_from_history
 
 
     @staticmethod

@@ -197,6 +197,52 @@ class SpotifyClient:
         return results
 
     @staticmethod
+    def get_artist(token: str, artist_id: str) -> Optional[Dict[str, Any]]:
+        """GET /v1/artists/{id} — endpoint individual, a veces no bloqueado en Development Mode."""
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(
+            f"{SpotifyClient.BASE_URL}/artists/{artist_id}",
+            headers=headers,
+        )
+        if response.status_code == 403:
+            return None
+        response.raise_for_status()
+        return response.json()
+
+    @staticmethod
+    def search_track(token: str, track_name: str, artist_name: str = "") -> Optional[Dict[str, Any]]:
+        """
+        Busca una canción por nombre (+ artista opcional) y devuelve el primer resultado.
+        Usa GET /v1/search?type=track — funciona en Development Mode.
+        """
+        headers = {"Authorization": f"Bearer {token}"}
+        q = f"track:{track_name} artist:{artist_name}" if artist_name else track_name
+        response = requests.get(
+            f"{SpotifyClient.BASE_URL}/search",
+            headers=headers,
+            params={"q": q, "type": "track", "limit": 1},
+        )
+        response.raise_for_status()
+        items = response.json().get("tracks", {}).get("items", [])
+        return items[0] if items else None
+
+    @staticmethod
+    def search_artist(token: str, artist_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Busca un artista por nombre y devuelve el primer resultado con todos sus campos.
+        Usa GET /v1/search?type=artist — funciona en Development Mode sin restricciones.
+        """
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(
+            f"{SpotifyClient.BASE_URL}/search",
+            headers=headers,
+            params={"q": artist_name, "type": "artist", "limit": 1},
+        )
+        response.raise_for_status()
+        items = response.json().get("artists", {}).get("items", [])
+        return items[0] if items else None
+
+    @staticmethod
     def get_recently_played(token: str, limit: int = 50, after: Optional[str] = None) -> Dict[str, Any]:
         """
         Obtiene historial de reproducción reciente.
