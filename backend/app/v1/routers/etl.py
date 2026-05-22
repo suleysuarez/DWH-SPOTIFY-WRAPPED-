@@ -166,7 +166,16 @@ def run_etl(
             if stats_updated:
                 logs.append(f"Stats actualizados: {stats_updated} artistas")
         else:
-            logs.append("ETL incremental: backfill de Spotify y Last.fm omitido")
+            logs.append("ETL incremental: backfill de Last.fm omitido")
+            stub_ids = [
+                r[0] for r in db.query(DimArtists.spotify_id)
+                .filter(DimArtists.followers_count == None)
+                .all()
+            ]
+            if stub_ids:
+                enriched = EtlService.enrich_artists_from_spotify(db, stub_ids, access_token)
+                if enriched:
+                    logs.append(f"Artistas nuevos enriquecidos: {enriched}")
 
         logs.append(f"Cargado: {artists_new} artistas nuevos, {tracks_new} canciones nuevas, {history_new} historial nuevo")
 
