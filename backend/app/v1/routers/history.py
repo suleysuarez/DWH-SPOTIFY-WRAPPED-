@@ -117,7 +117,11 @@ def get_history_stats(
     top_track_row = db.query(
         DimTracks.name,
         DimArtists.name.label("artist_name"),
-        func.count(FactListeningHistory.id).label("play_count")
+        func.count(FactListeningHistory.id).label("play_count"),
+        DimTracks.album_image_url,
+        DimTracks.spotify_id,
+        DimArtists.image_url.label("artist_image_url"),
+        DimArtists.spotify_id.label("artist_spotify_id"),
     ).join(
         DimTracks, FactListeningHistory.track_id == DimTracks.track_id
     ).join(
@@ -125,7 +129,9 @@ def get_history_stats(
     ).filter(
         FactListeningHistory.user_id == current_user.user_id
     ).group_by(
-        FactListeningHistory.track_id, DimTracks.name, DimArtists.name
+        FactListeningHistory.track_id, DimTracks.name, DimArtists.name,
+        DimTracks.album_image_url, DimTracks.spotify_id,
+        DimArtists.image_url, DimArtists.spotify_id,
     ).order_by(desc("play_count")).first()
 
     # Total de minutos reproducidos (usando duration_ms de dim_tracks)
@@ -148,6 +154,10 @@ def get_history_stats(
         "top_track": top_track_row[0] if top_track_row else None,
         "top_track_artist": top_track_row[1] if top_track_row else None,
         "top_track_plays": top_track_row[2] if top_track_row else 0,
+        "top_track_image": top_track_row[3] if top_track_row else None,
+        "top_track_id": top_track_row[4] if top_track_row else None,
+        "top_track_artist_image": top_track_row[5] if top_track_row else None,
+        "top_track_artist_id": top_track_row[6] if top_track_row else None,
     }
 
 

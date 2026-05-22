@@ -16,6 +16,8 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Etl = lazy(() => import("./pages/Etl"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Unauthorized = lazy(() => import("./pages/Unauthorized"));
+const ServerError = lazy(() => import("./pages/ServerError"));
 
 const pageVariants = {
   initial: { opacity: 0, y: 16 },
@@ -76,6 +78,10 @@ function Router() {
             <Route path="/">
               <Redirect to="/dashboard" />
             </Route>
+
+            {/* Error pages */}
+            <Route path="/401" component={Unauthorized} />
+            <Route path="/500" component={ServerError} />
 
             {/* 404 fallback */}
             <Route component={NotFound} />

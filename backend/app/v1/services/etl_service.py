@@ -505,6 +505,101 @@ class EtlService:
         logger.info(f"enrich_artists_from_spotify ({token_used}): {updated}/{len(spotify_ids)} artistas actualizados")
         return updated
 
+    @staticmethod
+    def backfill_track_popularity(db: Session, spotify_token: str) -> int:
+        """
+        Rellena popularity para todos los tracks del DWH que la tienen en NULL.
+
+        Llama a GET /v1/tracks?ids=... con user token (fallback: Client Credentials).
+        La API de recently-played no devuelve popularity, por eso la mayoría de tracks
+        creados desde el historial quedan con este campo nulo hasta que este backfill corre.
+        """
+        stubs = db.query(DimTracks).filter(DimTracks.popularity.is_(None)).all()
+        if not stubs:
+            return 0
+
+        raw = None
+        try:
+            raw = SpotifyClient.get_tracks(spotify_token, [t.spotify_id for t in stubs])
+        except Exception as e:
+            logger.warning(f"backfill_track_popularity con user token falló: {e}")
+            if settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET:
+                try:
+                    cc_token = SpotifyClient.get_client_credentials_token(
+                        settings.SPOTIFY_CLIENT_ID,
+                        settings.SPOTIFY_CLIENT_SECRET,
+                    )
+                    raw = SpotifyClient.get_tracks(cc_token, [t.spotify_id for t in stubs])
+                except Exception as e2:
+                    logger.warning(f"backfill_track_popularity CC token también falló: {e2}")
+                    return 0
+            else:
+                return 0
+
+        updated = 0
+        for item in (raw or []):
+            if not item:
+                continue
+            pop = item.get("popularity")
+            if pop is None:
+                continue
+            track = db.query(DimTracks).filter_by(spotify_id=item["id"]).first()
+            if track and track.popularity is None:
+                track.popularity = pop
+                updated += 1
+
+        if updated:
+            db.commit()
+        logger.info(f"backfill_track_popularity: {updated}/{len(stubs)} tracks actualizados")
+        return updated
+
+    @staticmethod
+    def backfill_track_images(db: Session, spotify_token: str) -> int:
+        """
+        Actualiza album_image_url para todos los tracks del DWH que la tienen en NULL.
+
+        Llama a GET /v1/tracks?ids=... con user token (fallback: Client Credentials).
+        """
+        stubs = db.query(DimTracks).filter(DimTracks.album_image_url.is_(None)).all()
+        if not stubs:
+            return 0
+
+        raw = None
+        try:
+            raw = SpotifyClient.get_tracks(spotify_token, [t.spotify_id for t in stubs])
+        except Exception as e:
+            logger.warning(f"backfill_track_images con user token falló: {e}")
+            if settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET:
+                try:
+                    cc_token = SpotifyClient.get_client_credentials_token(
+                        settings.SPOTIFY_CLIENT_ID,
+                        settings.SPOTIFY_CLIENT_SECRET,
+                    )
+                    raw = SpotifyClient.get_tracks(cc_token, [t.spotify_id for t in stubs])
+                except Exception as e2:
+                    logger.warning(f"backfill_track_images CC token también falló: {e2}")
+                    return 0
+            else:
+                return 0
+
+        updated = 0
+        for item in (raw or []):
+            if not item:
+                continue
+            album = item.get("album") or {}
+            images = album.get("images") or []
+            if not images:
+                continue
+            track = db.query(DimTracks).filter_by(spotify_id=item["id"]).first()
+            if track:
+                track.album_image_url = images[0]["url"]
+                updated += 1
+
+        if updated:
+            db.commit()
+        logger.info(f"backfill_track_images: {updated}/{len(stubs)} tracks actualizados")
+        return updated
+
     # ============ LOAD ============
 
     @staticmethod
@@ -595,6 +690,7 @@ class EtlService:
         logger.info(f"Cargando {len(tracks_data)} canciones...")
         new_count = 0
         updated_count = 0
+        new_tracks_detail: List[Dict[str, Any]] = []
         for track in tracks_data:
             existing = db.query(DimTracks).filter_by(spotify_id=track["spotify_id"]).first()
             if not existing:
@@ -614,6 +710,13 @@ class EtlService:
                 track_data["artist_id"] = artist.artist_id
                 db.add(DimTracks(**track_data))
                 new_count += 1
+                new_tracks_detail.append({
+                    "name": track.get("name", ""),
+                    "artist_name": track.get("artist_name", ""),
+                    "album_name": track.get("album_name"),
+                    "album_image_url": track.get("album_image_url"),
+                    "spotify_id": track.get("spotify_id"),
+                })
             else:
                 if track.get("popularity") is not None:
                     existing.popularity = track["popularity"]
@@ -630,7 +733,7 @@ class EtlService:
                 updated_count += 1
         db.commit()
         logger.info(f"Canciones cargadas: {new_count} nuevas, {updated_count} actualizadas")
-        return new_count, updated_count
+        return new_count, updated_count, new_tracks_detail
 
     @staticmethod
     def load_history(db: Session, spotify_user_id: str, history_data: List[Dict[str, Any]]) -> Tuple[int, int]:
@@ -648,10 +751,11 @@ class EtlService:
         logger.info(f"Cargando {len(history_data)} registros de historial...")
         new_count = 0
         skipped_count = 0
+        new_history_detail: List[Dict[str, Any]] = []
         user = db.query(DimUsers).filter_by(spotify_id=spotify_user_id).first()
         if not user:
             logger.error(f"Usuario no encontrado: {spotify_user_id}")
-            return 0, 0
+            return 0, 0, []
 
         for item in history_data:
             track = db.query(DimTracks).filter_by(
@@ -660,6 +764,8 @@ class EtlService:
 
             if track and track.popularity is None and item.get("popularity") is not None:
                 track.popularity = item["popularity"]
+            if track and track.album_image_url is None and item.get("album_image_url"):
+                track.album_image_url = item["album_image_url"]
 
             if not track:
                 # Canción fuera del top 50 — crearla con los datos de recently-played.
@@ -736,12 +842,18 @@ class EtlService:
             result = db.execute(stmt)
             if result.rowcount > 0:
                 new_count += 1
+                new_history_detail.append({
+                    "track_name": item.get("track_name", ""),
+                    "artist_name": item.get("artist_name", ""),
+                    "album_image_url": item.get("album_image_url"),
+                    "played_at": item["played_at"].isoformat(),
+                })
             else:
                 skipped_count += 1
 
         db.commit()
         logger.info(f"Historial cargado: {new_count} nuevos, {skipped_count} saltados")
-        return new_count, skipped_count
+        return new_count, skipped_count, new_history_detail
 
 
     @staticmethod
