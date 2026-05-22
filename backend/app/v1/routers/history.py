@@ -8,7 +8,9 @@ description: Router de historial de escucha. Expone /recently-played, /stats, /g
 """
 import logging
 from collections import Counter
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timedelta
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -211,31 +213,37 @@ def get_top_genres(
     return {"genres": genres_list, "total_plays": total_plays}
 
 
+def _period_cutoff(period: Optional[str]) -> Optional[datetime]:
+    if period == "day":
+        return datetime.utcnow() - timedelta(days=1)
+    if period == "week":
+        return datetime.utcnow() - timedelta(weeks=1)
+    if period == "month":
+        return datetime.utcnow() - timedelta(days=30)
+    return None
+
+
 @router.get("/peak-hour")
 def get_peak_hour(
+    period: Optional[str] = Query(None, pattern="^(day|week|month)$"),
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Determina la hora del día con más reproducciones del usuario.
+    logger.info(f"Obteniendo peak-hour para {current_user.spotify_id} period={period}")
 
-    Args:
-        current_user (DimUsers): Usuario autenticado via JWT.
-        db (Session): Sesión de SQLAlchemy.
-
-    Returns:
-        dict: { hour (0-23), play_count, label (ej. "14:00 - 15:00") }
-              Si no hay datos, retorna hour=0 y play_count=0.
-    """
-    logger.info(f"Obteniendo peak-hour para {current_user.spotify_id}")
-
-    row = db.query(
+    q = db.query(
         FactListeningHistory.hour_of_day,
         func.count(FactListeningHistory.id).label("play_count")
     ).filter(
         FactListeningHistory.user_id == current_user.user_id,
         FactListeningHistory.hour_of_day.isnot(None)
-    ).group_by(FactListeningHistory.hour_of_day).order_by(desc("play_count")).first()
+    )
+
+    cutoff = _period_cutoff(period)
+    if cutoff:
+        q = q.filter(FactListeningHistory.played_at >= cutoff)
+
+    row = q.group_by(FactListeningHistory.hour_of_day).order_by(desc("play_count")).first()
 
     if not row:
         return {"hour": 0, "play_count": 0, "label": "00:00 - 01:00"}
@@ -246,28 +254,27 @@ def get_peak_hour(
     label = f"{hour:02d}:00 - {end:02d}:00"
 
     return {"hour": hour, "play_count": play_count, "label": label}
+
+
 @router.get("/peak-hour/distribution")
 def get_hour_distribution(
+    period: Optional[str] = Query(None, pattern="^(day|week|month)$"),
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Distribución de reproducciones por cada hora del día (0-23).
-
-    Args:
-        current_user (DimUsers): Usuario autenticado via JWT.
-        db (Session): Sesión de SQLAlchemy.
-
-    Returns:
-        dict: { hours: [{hour, play_count, label}] } con 24 entradas (una por hora), play_count=0 si no hay datos.
-    """
-    rows = db.query(
+    q = db.query(
         FactListeningHistory.hour_of_day,
         func.count(FactListeningHistory.id).label("play_count")
     ).filter(
         FactListeningHistory.user_id == current_user.user_id,
         FactListeningHistory.hour_of_day.isnot(None)
-    ).group_by(FactListeningHistory.hour_of_day).all()
+    )
+
+    cutoff = _period_cutoff(period)
+    if cutoff:
+        q = q.filter(FactListeningHistory.played_at >= cutoff)
+
+    rows = q.group_by(FactListeningHistory.hour_of_day).all()
 
     counts = {row[0]: row[1] for row in rows}
     hours = [

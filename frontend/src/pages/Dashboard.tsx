@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import AppLayout from "@/components/layout/AppLayout";
 import EmptyState from "@/components/ui/EmptyState";
 import PeakHourCard from "@/components/dashboard/PeakHourCard";
+import SearchPanel from "@/components/dashboard/SearchPanel";
 import QuickStatsCards from "@/components/dashboard/QuickStatsCards";
 import Tilt3D from "@/components/ui/Tilt3D";
 import { useApi } from "@/hooks/useApi";
@@ -10,7 +11,7 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { endpoints } from "@/lib/api";
 import type { TopArtistsResponse } from "@/types/artist";
 import type { TopTracksResponse } from "@/types/track";
-import type { PeakHour, GenresResponse, QuickStats } from "@/types/history";
+import type { GenresResponse, QuickStats } from "@/types/history";
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from "recharts";
 
 // ── Stars ─────────────────────────────────────────────────────────────────────
@@ -241,7 +242,6 @@ function GenresPanel({ topGenres, loading }: { topGenres: GenreData[]; loading: 
 export default function Dashboard() {
   const artists  = useApi<TopArtistsResponse>(endpoints.artists.top);
   const tracks   = useApi<TopTracksResponse>(endpoints.tracks.top);
-  const peakHour = useApi<PeakHour>(endpoints.history.peakHour);
   const genres   = useApi<GenresResponse>(endpoints.history.genres);
   const stats    = useApi<QuickStats>(endpoints.history.quickStats);
 
@@ -608,6 +608,14 @@ export default function Dashboard() {
                 {stats.loading ? "" : `Equivalente a ${totalHours.toLocaleString()} horas de música pura.`}
               </p>
             </div>
+
+            {/* Video decorativo: DANCE */}
+            <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "65%", zIndex: 1, overflow: "hidden" }}>
+              <video autoPlay loop muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "60% center" }}>
+                <source src="/videos/DANCE.mp4" type="video/mp4" />
+              </video>
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #0a0a12 0%, transparent 35%), linear-gradient(to left, #0a0a12 0%, transparent 25%), linear-gradient(to bottom, #0a0a12 0%, transparent 25%), linear-gradient(to top, #0a0a12 0%, transparent 25%)" }} />
+            </div>
           </div>
         </PanelReveal>
 
@@ -722,12 +730,16 @@ export default function Dashboard() {
             <Num n="07" color="rgba(29,185,84,0.4)" />
             <Glow color="rgba(29,185,84,0.12)" style={{ left: -60, bottom: -60, width: 450, height: 450 }} />
 
-            <div style={{ position: "relative", zIndex: 2, width: "100%" }}>
+            <div style={{ position: "relative", zIndex: 2, flex: "0 0 60%" }}>
               <h2 style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(2.5rem,4.5vw,4rem)", fontWeight: 900, color: "#fff", lineHeight: 1.05, marginBottom: 4 }}>Tu actividad</h2>
               <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(2rem,3.5vw,3rem)", fontWeight: 900, color: "#1DB954", marginBottom: 36 }}>por hora del día</p>
-              <div style={{ maxWidth: 800 }}>
-                <PeakHourCard data={peakHour.data} loading={peakHour.loading} error={peakHour.error} onRetry={peakHour.refetch} />
-              </div>
+              <PeakHourCard />
+            </div>
+
+            {/* Foto decorativa: Suley */}
+            <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "42%", zIndex: 1, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+              <img src="/images/suley.png" alt="Suley" style={{ height: "95%", width: "auto", objectFit: "contain", objectPosition: "center bottom", display: "block" }} />
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #060d06 0%, transparent 30%), linear-gradient(to bottom, #060d06 0%, transparent 20%)" }} />
             </div>
           </div>
         </PanelReveal>
@@ -764,7 +776,23 @@ export default function Dashboard() {
           </div>
         </PanelReveal>
 
-        {/* ══ 09 GRACIAS ══════════════════════════════════════════════════════ */}
+        {/* ══ 09 BUSCADOR ═════════════════════════════════════════════════════ */}
+        <PanelReveal delay={0.05}>
+          <div style={{ ...P, background: "linear-gradient(135deg,#08080f 0%,#0f0a1e 50%,#080f10 100%)", border: "1px solid rgba(130,80,255,0.18)" }}>
+            <Stars />
+            <Num n="09" color="rgba(130,80,255,0.45)" />
+            <Glow color="rgba(130,80,255,0.12)" style={{ right: -60, top: -60, width: 500, height: 500 }} />
+            <Glow color="rgba(29,185,84,0.08)"  style={{ left: -60, bottom: -60, width: 400, height: 400 }} />
+
+            <div style={{ position: "relative", zIndex: 2, width: "100%" }}>
+              <h2 style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(2.5rem,4.5vw,4rem)", fontWeight: 900, color: "#fff", lineHeight: 1.05, marginBottom: 4 }}>Busca tu</h2>
+              <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: "clamp(2rem,3.5vw,3rem)", fontWeight: 900, color: "#a78bfa", marginBottom: 36 }}>música favorita</p>
+              <SearchPanel />
+            </div>
+          </div>
+        </PanelReveal>
+
+        {/* ══ 10 GRACIAS ══════════════════════════════════════════════════════ */}
         <PanelReveal delay={0.05}>
           <div style={{ ...P, background: "linear-gradient(135deg,#060d06 0%,#0a1a0a 40%,#0e1628 100%)", border: "1px solid rgba(29,185,84,0.25)" }}>
             <Stars />

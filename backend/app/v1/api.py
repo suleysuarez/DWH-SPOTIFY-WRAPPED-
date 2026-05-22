@@ -8,7 +8,7 @@ description: Punto de entrada del API v1. Agrega los routers de auth, profile, a
 """
 
 from fastapi import APIRouter
-from app.v1.routers import auth, profile, artists, tracks, history, etl
+from app.v1.routers import auth, profile, artists, tracks, history, etl, search
 
 router = APIRouter(prefix="/v1")
 
@@ -18,3 +18,4 @@ router.include_router(artists.router)
 router.include_router(tracks.router)
 router.include_router(history.router)
 router.include_router(etl.router)
+router.include_router(search.router)

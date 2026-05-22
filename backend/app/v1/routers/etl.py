@@ -97,6 +97,14 @@ def run_etl(
             logger.info("Access token de Spotify renovado exitosamente")
         except Exception as refresh_err:
             logger.warning(f"Token refresh fallido ({refresh_err}), usando token existente")
+            # Verificar que el token existente siga siendo válido
+            try:
+                SpotifyClient.get_current_user(access_token)
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Tu sesión de Spotify expiró. Por favor cierra sesión y vuelve a iniciar."
+                )
 
     audit = EtlAudit(
         spotify_user_id=current_user.spotify_id,
@@ -141,41 +149,49 @@ def run_etl(
         EtlService.load_user(db, user_transformed, current_user.spotify_access_token, current_user.spotify_refresh_token)
         artists_new, artists_skipped = EtlService.load_artists(db, artists_transformed, full_run=is_full_run)
         tracks_new, tracks_skipped, new_tracks_detail = EtlService.load_tracks(db, tracks_transformed, full_run=is_full_run)
-        history_new, history_skipped, new_history_detail = EtlService.load_history(db, current_user.spotify_id, history_transformed)
+        history_new, history_skipped, new_history_detail, new_catalog_from_history = EtlService.load_history(db, current_user.spotify_id, history_transformed, spotify_token=access_token)
+        new_tracks_detail.extend(new_catalog_from_history)
+        tracks_new += len(new_catalog_from_history)
 
-        # ── Backfill solo en ETL full ─────────────────────────────────────────
-        if is_full_run:
-            logs.append("Enriqueciendo datos (ETL full)...")
-            all_artist_ids = [r[0] for r in db.query(DimArtists.spotify_id).all()]
-            enriched = EtlService.enrich_artists_from_spotify(db, all_artist_ids, access_token)
+        # ── Rellenar nulls: corre siempre (son baratos, solo tocan registros con null) ──
+        incomplete_artist_ids = [
+            r[0] for r in db.query(DimArtists.spotify_id).filter(
+                (DimArtists.followers_count == None) | (DimArtists.image_url == None)
+            ).all()
+        ]
+        if incomplete_artist_ids:
+            enriched = EtlService.enrich_artists_from_spotify(db, incomplete_artist_ids, access_token)
             if enriched:
-                logs.append(f"Artistas enriquecidos con datos reales de Spotify: {enriched}")
+                logs.append(f"Artistas incompletos enriquecidos: {enriched}")
+
+        tracks_enriched = EtlService.backfill_track_images(db, spotify_token=access_token)
+        if tracks_enriched:
+            logs.append(f"Imágenes de tracks actualizadas: {tracks_enriched}")
+
+        pop_enriched = EtlService.backfill_track_popularity(db, spotify_token=access_token)
+        if pop_enriched:
+            logs.append(f"Popularidad de tracks actualizada: {pop_enriched}")
+
+        # ── Stats via Last.fm: corre siempre, solo toca artistas con null ──────
+        stats_updated = EtlService.backfill_artist_stats(db)
+        if stats_updated:
+            logs.append(f"Stats actualizados via Last.fm: {stats_updated}")
+
+        # ── Backfill pesado: solo en ETL full (refresh completo de Spotify) ──
+        if is_full_run:
+            logs.append("Enriqueciendo datos completos (ETL full)...")
+            all_artist_ids = [r[0] for r in db.query(DimArtists.spotify_id).all()]
+            enriched_all = EtlService.enrich_artists_from_spotify(db, all_artist_ids, access_token)
+            if enriched_all:
+                logs.append(f"Todos los artistas refrescados: {enriched_all}")
             data_updated = EtlService.backfill_artist_data(db, spotify_token=access_token)
             if data_updated:
-                logs.append(f"Artists enriched via Spotify: {data_updated} stubs updated")
-            tracks_enriched = EtlService.backfill_track_images(db, spotify_token=access_token)
-            if tracks_enriched:
-                logs.append(f"Track images enriched via Spotify: {tracks_enriched} tracks updated")
-            pop_enriched = EtlService.backfill_track_popularity(db, spotify_token=access_token)
-            if pop_enriched:
-                logs.append(f"Track popularity enriched via Spotify: {pop_enriched} tracks updated")
+                logs.append(f"Stubs de artistas reparados: {data_updated}")
             genres_updated = EtlService.backfill_artist_genres(db)
             if genres_updated:
-                logs.append(f"Genres enriched via Last.fm: {genres_updated} artists updated")
-            stats_updated = EtlService.backfill_artist_stats(db)
-            if stats_updated:
-                logs.append(f"Stats actualizados: {stats_updated} artistas")
+                logs.append(f"Géneros actualizados via Last.fm: {genres_updated}")
         else:
-            logs.append("ETL incremental: backfill de Last.fm omitido")
-            stub_ids = [
-                r[0] for r in db.query(DimArtists.spotify_id)
-                .filter(DimArtists.followers_count == None)
-                .all()
-            ]
-            if stub_ids:
-                enriched = EtlService.enrich_artists_from_spotify(db, stub_ids, access_token)
-                if enriched:
-                    logs.append(f"Artistas nuevos enriquecidos: {enriched}")
+            logs.append("ETL incremental: refresh completo de Spotify omitido")
 
         logs.append(f"Cargado: {artists_new} artistas nuevos, {tracks_new} canciones nuevas, {history_new} historial nuevo")
 
@@ -208,8 +224,8 @@ def run_etl(
                 "tracks_updated": tracks_skipped,
                 "history_new": history_new,
                 "history_skipped": history_skipped,
-                "new_tracks": new_tracks_detail,
-                "new_history": new_history_detail[:30],
+                "new_tracks": [t for t in new_tracks_detail if t.get("name")][:30],
+                "new_history": [h for h in new_history_detail if h.get("track_name")][:30],
             },
         }
 
@@ -228,6 +244,94 @@ def run_etl(
             "message": str(e),
             "logs": logs + [f"Error: {str(e)}"],
         }
+
+
+@router.post("/backfill-tracks")
+def backfill_tracks(
+    current_user: DimUsers = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Rellena popularity y album_image_url de tracks con datos nulos via /v1/search.
+    """
+    from sqlalchemy import or_
+    stubs = (
+        db.query(DimTracks, DimArtists.name.label("artist_name"))
+        .outerjoin(DimArtists, DimTracks.artist_id == DimArtists.artist_id)
+        .filter(or_(
+            DimTracks.popularity.is_(None),
+            DimTracks.album_image_url.is_(None),
+        ))
+        .all()
+    )
+
+    if not stubs:
+        return {"message": "No hay tracks con datos faltantes", "updated": 0}
+
+    access_token = current_user.spotify_access_token
+    if current_user.spotify_refresh_token:
+        try:
+            new_tokens = SpotifyClient.refresh_access_token(
+                current_user.spotify_refresh_token,
+                settings.SPOTIFY_CLIENT_ID,
+                settings.SPOTIFY_CLIENT_SECRET,
+            )
+            access_token = new_tokens["access_token"]
+        except Exception:
+            pass
+
+    search_token = access_token
+    if settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET:
+        try:
+            search_token = SpotifyClient.get_client_credentials_token(
+                settings.SPOTIFY_CLIENT_ID,
+                settings.SPOTIFY_CLIENT_SECRET,
+            )
+        except Exception:
+            pass
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed as _ac
+
+    def _search(row) -> tuple:
+        track = row.DimTracks
+        artist_name = row.artist_name or ""
+        try:
+            result = SpotifyClient.search_track(search_token, track.name, artist_name)
+            return track.track_id, result
+        except Exception:
+            return track.track_id, None
+
+    results_map: dict = {}
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futs = {executor.submit(_search, row): row for row in stubs}
+        for fut in _ac(futs):
+            tid, result = fut.result()
+            if result:
+                results_map[tid] = result
+
+    updated = 0
+    for row in stubs:
+        track = row.DimTracks
+        sp = results_map.get(track.track_id)
+        if not sp:
+            continue
+        album = sp.get("album") or {}
+        images = album.get("images") or []
+        pop = sp.get("popularity")
+        if pop is not None and track.popularity is None:
+            track.popularity = pop
+        if images and track.album_image_url is None:
+            track.album_image_url = images[0]["url"]
+        updated += 1
+
+    db.commit()
+    logger.info(f"backfill-tracks: {updated}/{len(stubs)} tracks actualizados")
+
+    return {
+        "message": f"{updated}/{len(stubs)} tracks actualizados",
+        "updated": updated,
+        "total_stubs": len(stubs),
+    }
 
 
 @router.get("/status")
@@ -342,6 +446,157 @@ def get_etl_history(
         "limit": limit,
         "offset": offset,
         "has_more": (offset + limit) < total,
+    }
+
+
+@router.post("/backfill-artists")
+def backfill_artists(
+    current_user: DimUsers = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Fuerza el enriquecimiento de todos los artistas con datos nulos (image_url, popularity, followers_count).
+    Devuelve un reporte detallado por artista.
+    """
+    from sqlalchemy import or_
+    stubs = db.query(DimArtists).filter(
+        or_(
+            DimArtists.image_url.is_(None),
+            DimArtists.popularity.is_(None),
+            DimArtists.followers_count.is_(None),
+        )
+    ).all()
+
+    if not stubs:
+        return {"message": "No hay artistas con datos faltantes", "updated": 0, "results": []}
+
+    access_token = current_user.spotify_access_token
+    if current_user.spotify_refresh_token:
+        try:
+            new_tokens = SpotifyClient.refresh_access_token(
+                current_user.spotify_refresh_token,
+                settings.SPOTIFY_CLIENT_ID,
+                settings.SPOTIFY_CLIENT_SECRET,
+            )
+            access_token = new_tokens["access_token"]
+            current_user.spotify_access_token = access_token
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Token refresh falló en backfill: {e}")
+
+    api_errors: list = []
+    cc_configured = bool(settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET)
+
+    # Obtener token de búsqueda (CC preferido, fallback user token)
+    search_token = access_token
+    if cc_configured:
+        try:
+            search_token = SpotifyClient.get_client_credentials_token(
+                settings.SPOTIFY_CLIENT_ID,
+                settings.SPOTIFY_CLIENT_SECRET,
+            )
+        except Exception as e:
+            api_errors.append(f"CC token falló, usando user token: {e}")
+
+    # 1. Intentar endpoint individual /v1/artists/{id} (más preciso que search)
+    # 2. Fallback a /v1/search por nombre si el individual también da 403
+    from concurrent.futures import ThreadPoolExecutor, as_completed as futures_done
+
+    spotify_map: dict = {}
+    id_hits = 0
+    search_hits = 0
+
+    def _fetch(artist) -> tuple:
+        # Intento 1: endpoint individual por ID
+        try:
+            result = SpotifyClient.get_artist(search_token, artist.spotify_id)
+            if result:
+                return artist.spotify_id, result, "id"
+        except Exception:
+            pass
+        # Intento 2: search por nombre
+        try:
+            result = SpotifyClient.search_artist(search_token, artist.name)
+            return artist.spotify_id, result, "search"
+        except Exception:
+            return artist.spotify_id, None, "failed"
+
+    try:
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futs = {executor.submit(_fetch, a): a for a in stubs}
+            for fut in futures_done(futs):
+                sid, result, method = fut.result()
+                if result:
+                    spotify_map[sid] = result
+                    if method == "id":
+                        id_hits += 1
+                    else:
+                        search_hits += 1
+    except Exception as e:
+        api_errors.append(f"Error en fetch concurrente: {type(e).__name__}: {e}")
+
+    logger.info(f"backfill-artists: {id_hits} por ID, {search_hits} por search, {len(spotify_map)}/{len(stubs)} total")
+
+    results = []
+    updated_count = 0
+
+    for artist in stubs:
+        sp = spotify_map.get(artist.spotify_id)
+        entry = {
+            "artist_id": artist.artist_id,
+            "name": artist.name,
+            "spotify_id": artist.spotify_id,
+            "spotify_found": sp is not None,
+            "before": {
+                "popularity": artist.popularity,
+                "followers_count": artist.followers_count,
+                "has_image": artist.image_url is not None,
+            },
+        }
+
+        if sp:
+            images = sp.get("images") or []
+            new_pop = sp.get("popularity")
+            new_followers = (sp.get("followers") or {}).get("total")
+            new_image = images[0]["url"] if images else None
+            new_genres = sp.get("genres") or []
+
+            if new_pop is not None:
+                artist.popularity = new_pop
+            if new_followers is not None:
+                artist.followers_count = new_followers
+            if new_image:
+                artist.image_url = new_image
+            if new_genres and (not artist.genres or artist.genres == [""]):
+                from sqlalchemy.orm.attributes import flag_modified
+                artist.genres = new_genres
+                flag_modified(artist, "genres")
+
+            entry["after"] = {
+                "popularity": artist.popularity,
+                "followers_count": artist.followers_count,
+                "has_image": artist.image_url is not None,
+            }
+            updated_count += 1
+        else:
+            entry["after"] = entry["before"]
+            entry["error"] = "Spotify no devolvió datos para este ID"
+
+        results.append(entry)
+
+    db.commit()
+
+    not_found = [r for r in results if not r["spotify_found"]]
+    logger.info(f"backfill-artists completado: {updated_count}/{len(stubs)} actualizados, {len(not_found)} no encontrados en Spotify")
+
+    return {
+        "message": f"{updated_count}/{len(stubs)} artistas actualizados",
+        "updated": updated_count,
+        "api_errors": api_errors,
+        "cc_configured": cc_configured,
+        "fetch_stats": {"by_id": id_hits, "by_search": search_hits},
+        "not_found_in_spotify": [r["name"] for r in not_found],
+        "results": results,
     }
 
 
