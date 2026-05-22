@@ -313,6 +313,70 @@ class EtlService:
         return updated
 
     @staticmethod
+    def backfill_artist_stats(db: Session) -> int:
+        """
+        Actualiza popularity y followers_count de artistas con datos nulos usando Last.fm listeners.
+        Solo se llama en ETL full para no saturar la API de Last.fm en cada ejecución.
+        """
+        import math
+        from sqlalchemy import func as sa_func, or_
+        if not settings.LASTFM_API_KEY:
+            return 0
+
+        stubs = db.query(DimArtists).filter(
+            or_(
+                DimArtists.popularity.is_(None),
+                DimArtists.followers_count.is_(None),
+            )
+        ).all()
+        if not stubs:
+            return 0
+
+        listeners_map: Dict[int, Optional[int]] = {}
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            fut_map = {executor.submit(EtlService.fetch_lastfm_listeners, a.name): a for a in stubs}
+            for fut in as_completed(fut_map):
+                artist = fut_map[fut]
+                try:
+                    listeners_map[artist.artist_id] = fut.result()
+                except Exception:
+                    listeners_map[artist.artist_id] = None
+
+        play_counts = dict(
+            db.query(DimArtists.artist_id, sa_func.count(FactListeningHistory.id))
+            .join(FactListeningHistory, FactListeningHistory.artist_id == DimArtists.artist_id)
+            .group_by(DimArtists.artist_id)
+            .all()
+        )
+        max_plays = max(play_counts.values(), default=1)
+        LOG_MAX_LISTENERS = math.log1p(10_000_000)
+
+        updated = 0
+        for artist in stubs:
+            listeners = listeners_map.get(artist.artist_id)
+            plays = play_counts.get(artist.artist_id, 1)
+            changed = False
+
+            if artist.followers_count is None:
+                artist.followers_count = listeners or max(1, plays * 500)
+                changed = True
+
+            if artist.popularity is None:
+                if listeners:
+                    artist.popularity = min(100, max(10, round(math.log1p(listeners) * 100 / LOG_MAX_LISTENERS)))
+                else:
+                    artist.popularity = max(10, round(math.log1p(plays) * 100 / math.log1p(max_plays)))
+                changed = True
+
+            if changed:
+                updated += 1
+
+        if stubs:
+            db.commit()
+        logger.info(f"[LASTFM] backfill_artist_stats: {updated}/{len(stubs)} artistas actualizados")
+        return updated
+
+    @staticmethod
     def backfill_artist_data(db: Session, spotify_token: Optional[str] = None) -> int:
         """
         Enriquece todos los artistas stub con datos reales de Spotify.
@@ -636,32 +700,32 @@ class EtlService:
         return user.spotify_id
 
     @staticmethod
-    def load_artists(db: Session, artists_data: List[Dict[str, Any]]) -> Tuple[int, int]:
+    def load_artists(db: Session, artists_data: List[Dict[str, Any]], full_run: bool = True) -> Tuple[int, int]:
         """
-        Inserta artistas nuevos y actualiza los existentes en dim_artists.
+        Inserta artistas nuevos y, en ETL full, actualiza los existentes en dim_artists.
 
-        Args:
-            db (Session): Sesión de SQLAlchemy.
-            artists_data (List[Dict[str, Any]]): Lista de artistas normalizados por transform_artists.
-
-        Returns:
-            Tuple[int, int]: (new_count, updated_count) — cantidad de artistas insertados y actualizados.
+        En modo incremental (full_run=False) solo se insertan artistas nuevos; los
+        existentes no se tocan para evitar llamadas innecesarias a Last.fm.
         """
-        logger.info(f"Cargando {len(artists_data)} artistas...")
+        logger.info(f"Cargando {len(artists_data)} artistas (full_run={full_run})...")
         new_count = 0
         updated_count = 0
         for artist in artists_data:
             existing = db.query(DimArtists).filter_by(spotify_id=artist["spotify_id"]).first()
-            incoming_genres = artist.get("genres") or []
-            if not incoming_genres:
-                fetched = EtlService.fetch_lastfm_genres(artist["name"])
-                incoming_genres = fetched if fetched else [""]
 
             if not existing:
+                incoming_genres = artist.get("genres") or []
+                if not incoming_genres:
+                    fetched = EtlService.fetch_lastfm_genres(artist["name"])
+                    incoming_genres = fetched if fetched else [""]
                 artist["genres"] = incoming_genres
                 db.add(DimArtists(**artist))
                 new_count += 1
-            else:
+            elif full_run:
+                incoming_genres = artist.get("genres") or []
+                if not incoming_genres:
+                    fetched = EtlService.fetch_lastfm_genres(artist["name"])
+                    incoming_genres = fetched if fetched else [""]
                 existing.genres = incoming_genres if incoming_genres else (existing.genres or [""])
                 flag_modified(existing, "genres")
                 if artist.get("popularity") is not None:
@@ -676,18 +740,14 @@ class EtlService:
         return new_count, updated_count
 
     @staticmethod
-    def load_tracks(db: Session, tracks_data: List[Dict[str, Any]]) -> Tuple[int, int]:
+    def load_tracks(db: Session, tracks_data: List[Dict[str, Any]], full_run: bool = True) -> Tuple[int, int]:
         """
         Inserta canciones nuevas en dim_tracks, creando un artista básico si no existe en DWH.
 
-        Args:
-            db (Session): Sesión de SQLAlchemy.
-            tracks_data (List[Dict[str, Any]]): Lista de canciones normalizadas por transform_tracks.
-
-        Returns:
-            Tuple[int, int]: (new_count, skipped_count) — canciones insertadas y omitidas (ya existían).
+        En modo incremental (full_run=False) solo se insertan canciones nuevas; las
+        existentes no se actualizan para reducir escrituras innecesarias.
         """
-        logger.info(f"Cargando {len(tracks_data)} canciones...")
+        logger.info(f"Cargando {len(tracks_data)} canciones (full_run={full_run})...")
         new_count = 0
         updated_count = 0
         new_tracks_detail: List[Dict[str, Any]] = []
@@ -717,7 +777,7 @@ class EtlService:
                     "album_image_url": track.get("album_image_url"),
                     "spotify_id": track.get("spotify_id"),
                 })
-            else:
+            elif full_run:
                 if track.get("popularity") is not None:
                     existing.popularity = track["popularity"]
                 existing.explicit = track.get("explicit") if track.get("explicit") is not None else existing.explicit

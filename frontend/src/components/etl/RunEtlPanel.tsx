@@ -211,10 +211,14 @@ export default function RunEtlPanel({ onRunComplete }: RunEtlPanelProps) {
       }
 
       if (result.status === "success" || result.status === "started") {
-        setLogs((prev) => [...prev, { type: "success", text: "ETL completado exitosamente." }]);
+        const runLabel = result.run_type === "full" ? "ETL Full" : "ETL Incremental";
+        setLogs((prev) => [
+          ...prev,
+          { type: "success", text: `${runLabel} completado exitosamente.` },
+        ]);
         setStatus("success");
         if (result.summary) setSummary(result.summary);
-        toast.success("ETL completado", { description: "Datos sincronizados correctamente." });
+        toast.success(`${runLabel} completado`, { description: "Datos sincronizados correctamente." });
         onRunComplete?.();
       } else {
         setLogs((prev) => [...prev, { type: "error", text: result.message ?? "ETL finalizó con errores." }]);

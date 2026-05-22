@@ -5,11 +5,13 @@ date: 2026-05-15
 version: 1.0
 description: Router del pipeline ETL. Expone POST /run (ejecuta Extract→Transform→Load),
              GET /status (estado del DWH) y GET /history (historial paginado). Requiere JWT.
+             ETL full (géneros + stats) se ejecuta automáticamente una vez por semana (lunes-domingo).
+             El resto de días corre ETL incremental (solo historial y nuevos artistas/tracks).
 """
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -52,10 +54,35 @@ def run_etl(
     db: Session = Depends(get_db),
 ):
     """
-    Ejecuta el pipeline ETL completo: Extract → Transform → Load.
+    Ejecuta el pipeline ETL.
+
+    - ETL FULL (lunes o primera ejecución de la semana):
+        Extrae artistas, tracks e historial.
+        Recalcula géneros, popularity y followers desde Last.fm.
+
+    - ETL INCREMENTAL (martes a domingo, si ya hubo full esta semana):
+        Solo extrae historial nuevo y artistas/tracks nuevos.
+        No recalcula géneros ni stats de artistas ya existentes.
     """
     logger.info(f"Iniciando ETL para {current_user.spotify_id}")
 
+    # ── Determinar si es ETL full o incremental ──────────────────────────────
+    # Full si: es lunes, o no hubo ningún ETL exitoso esta semana.
+    today = datetime.utcnow()
+    monday = today - timedelta(days=today.weekday())
+    monday_start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    recent_success = db.query(EtlAudit).filter(
+        EtlAudit.spotify_user_id == current_user.spotify_id,
+        EtlAudit.status == "success",
+        EtlAudit.started_at >= monday_start,
+    ).order_by(desc(EtlAudit.started_at)).first()
+
+    is_full_run = (recent_success is None) or (today.weekday() == 0)
+    run_type = "FULL" if is_full_run else "INCREMENTAL"
+    logger.info(f"Tipo de ETL: {run_type}")
+
+    # ── Renovar access token ─────────────────────────────────────────────────
     access_token = current_user.spotify_access_token
     if current_user.spotify_refresh_token:
         try:
@@ -74,12 +101,14 @@ def run_etl(
     audit = EtlAudit(
         spotify_user_id=current_user.spotify_id,
         status="running",
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.utcnow(),
+        is_full_run=is_full_run,
     )
     db.add(audit)
     db.commit()
 
     logs = []
+    logs.append(f"Modo ETL: {run_type}")
     t0 = time.time()
 
     try:
@@ -110,33 +139,42 @@ def run_etl(
 
         logs.append("Cargando datos en DWH...")
         EtlService.load_user(db, user_transformed, current_user.spotify_access_token, current_user.spotify_refresh_token)
-        artists_new, artists_skipped = EtlService.load_artists(db, artists_transformed)
-        all_artist_ids = [r[0] for r in db.query(DimArtists.spotify_id).all()]
-        enriched = EtlService.enrich_artists_from_spotify(db, all_artist_ids, access_token)
-        if enriched:
-            logs.append(f"Artistas enriquecidos con datos reales de Spotify: {enriched}")
-        tracks_new, tracks_skipped, new_tracks_detail = EtlService.load_tracks(db, tracks_transformed)
+        artists_new, artists_skipped = EtlService.load_artists(db, artists_transformed, full_run=is_full_run)
+        tracks_new, tracks_skipped, new_tracks_detail = EtlService.load_tracks(db, tracks_transformed, full_run=is_full_run)
         history_new, history_skipped, new_history_detail = EtlService.load_history(db, current_user.spotify_id, history_transformed)
 
-        data_updated = EtlService.backfill_artist_data(db, spotify_token=access_token)
-        if data_updated:
-            logs.append(f"Artists enriched via Spotify: {data_updated} stubs updated")
-        tracks_enriched = EtlService.backfill_track_images(db, spotify_token=access_token)
-        if tracks_enriched:
-            logs.append(f"Track images enriched via Spotify: {tracks_enriched} tracks updated")
-        pop_enriched = EtlService.backfill_track_popularity(db, spotify_token=access_token)
-        if pop_enriched:
-            logs.append(f"Track popularity enriched via Spotify: {pop_enriched} tracks updated")
-        genres_updated = EtlService.backfill_artist_genres(db)
-        if genres_updated:
-            logs.append(f"Genres enriched via Last.fm: {genres_updated} artists updated")
+        # ── Backfill solo en ETL full ─────────────────────────────────────────
+        if is_full_run:
+            logs.append("Enriqueciendo datos (ETL full)...")
+            all_artist_ids = [r[0] for r in db.query(DimArtists.spotify_id).all()]
+            enriched = EtlService.enrich_artists_from_spotify(db, all_artist_ids, access_token)
+            if enriched:
+                logs.append(f"Artistas enriquecidos con datos reales de Spotify: {enriched}")
+            data_updated = EtlService.backfill_artist_data(db, spotify_token=access_token)
+            if data_updated:
+                logs.append(f"Artists enriched via Spotify: {data_updated} stubs updated")
+            tracks_enriched = EtlService.backfill_track_images(db, spotify_token=access_token)
+            if tracks_enriched:
+                logs.append(f"Track images enriched via Spotify: {tracks_enriched} tracks updated")
+            pop_enriched = EtlService.backfill_track_popularity(db, spotify_token=access_token)
+            if pop_enriched:
+                logs.append(f"Track popularity enriched via Spotify: {pop_enriched} tracks updated")
+            genres_updated = EtlService.backfill_artist_genres(db)
+            if genres_updated:
+                logs.append(f"Genres enriched via Last.fm: {genres_updated} artists updated")
+            stats_updated = EtlService.backfill_artist_stats(db)
+            if stats_updated:
+                logs.append(f"Stats actualizados: {stats_updated} artistas")
+        else:
+            logs.append("ETL incremental: backfill de Spotify y Last.fm omitido")
 
         logs.append(f"Cargado: {artists_new} artistas nuevos, {tracks_new} canciones nuevas, {history_new} historial nuevo")
 
         duration_ms = int((time.time() - t0) * 1000)
         audit.status = "success"
-        audit.finished_at = datetime.now(timezone.utc)
+        audit.finished_at = datetime.utcnow()
         audit.duration_ms = duration_ms
+        audit.is_full_run = is_full_run
         audit.users_new = 1
         audit.artists_new = artists_new
         audit.artists_skipped = artists_skipped
@@ -148,11 +186,12 @@ def run_etl(
         audit.cursor_next_ms = cursor_next_ms
         db.commit()
 
-        logger.info(f"ETL completado exitosamente en {duration_ms}ms")
+        logger.info(f"ETL {run_type} completado en {duration_ms}ms")
 
         return {
             "status": "success",
-            "message": "ETL completado exitosamente",
+            "run_type": run_type.lower(),
+            "message": f"ETL {run_type.lower()} completado exitosamente",
             "logs": logs,
             "run_id": audit.audit_id,
             "summary": {
@@ -169,13 +208,14 @@ def run_etl(
         logger.error(f"Error en ETL: {e}", exc_info=True)
         duration_ms = int((time.time() - t0) * 1000)
         audit.status = "error"
-        audit.finished_at = datetime.now(timezone.utc)
+        audit.finished_at = datetime.utcnow()
         audit.duration_ms = duration_ms
         audit.error_message = str(e)
         db.commit()
 
         return {
             "status": "error",
+            "run_type": run_type.lower(),
             "message": str(e),
             "logs": logs + [f"Error: {str(e)}"],
         }
@@ -186,14 +226,10 @@ def get_etl_status(
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Obtiene el estado actual del DWH y las últimas 5 ejecuciones ETL del usuario.
-    """
     logger.info(f"Obteniendo estado ETL para {current_user.spotify_id}")
 
     tables = []
 
-    # Última sincronización exitosa
     last_sync = None
     last_successful_audit = db.query(EtlAudit).filter_by(
         spotify_user_id=current_user.spotify_id,
@@ -244,6 +280,7 @@ def get_etl_status(
             "records_extracted": (audit.artists_new or 0) + (audit.tracks_new or 0) + (audit.history_new or 0),
             "records_loaded": (audit.artists_new or 0) + (audit.tracks_new or 0) + (audit.history_new or 0),
             "status": audit.status,
+            "run_type": "full" if audit.is_full_run else "incremental",
             "error_message": audit.error_message,
         }
         for audit in recent_audits
@@ -263,9 +300,6 @@ def get_etl_history(
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Historial paginado de ejecuciones ETL del usuario con filtro opcional por estado.
-    """
     logger.info(f"Obteniendo historial ETL para {current_user.spotify_id}")
 
     query = db.query(EtlAudit).filter_by(spotify_user_id=current_user.spotify_id)
@@ -283,6 +317,7 @@ def get_etl_history(
             "finished_at": audit.finished_at.isoformat() + "+00:00" if audit.finished_at else None,
             "duration_seconds": audit.duration_ms // 1000 if audit.duration_ms else None,
             "status": audit.status,
+            "run_type": "full" if audit.is_full_run else "incremental",
             "error_message": audit.error_message,
             "artists_new": audit.artists_new or 0,
             "tracks_new": audit.tracks_new or 0,
@@ -307,9 +342,6 @@ def get_etl_run_tracks(
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Retorna las canciones insertadas en dim_tracks durante una ejecución ETL específica.
-    """
     audit = db.query(EtlAudit).filter_by(
         audit_id=run_id,
         spotify_user_id=current_user.spotify_id,

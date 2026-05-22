@@ -131,7 +131,7 @@ function GenresPanel({ topGenres, loading }: { topGenres: GenreData[]; loading: 
         </p>
       </div>
 
-      <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 80, width: "100%" }}>
+      <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 80, width: "56%" }}>
         {!loading && topGenres.length > 0 && (
           <Tilt3D intensity={6} style={{ position: "relative", flexShrink: 0, width: 400, height: 400 }}>
             <div style={{ position: "absolute", inset: -12, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.04)", pointerEvents: "none" }} />
@@ -230,8 +230,8 @@ function GenresPanel({ topGenres, loading }: { topGenres: GenreData[]; loading: 
         }
       </div>
 
-      <div style={{ position: "absolute", right: 0, bottom: 0, top: 0, width: "14%", zIndex: 1, opacity: 0.35 }}>
-        <img src="/images/img_04.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "bottom right" }} />
+      <div style={{ position: "absolute", right: 0, bottom: 0, top: 0, width: "44%", zIndex: 1 }}>
+        <img src="/images/img_04.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "bottom right", filter: "drop-shadow(0 0 60px rgba(79,142,247,0.35))", opacity: 0.85 }} />
       </div>
     </div>
   );

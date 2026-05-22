@@ -28,6 +28,7 @@ interface EtlRun {
   finished_at: string | null;
   duration_seconds: number | null;
   status: "success" | "error" | "running";
+  run_type: "full" | "incremental";
   error_message: string | null;
   artists_new: number;
   tracks_new: number;
@@ -294,6 +295,7 @@ export default function EtlHistoryTable() {
             <thead>
               <tr className="text-white/30 border-b border-white/5">
                 <th className="text-left pb-2 pr-3 font-medium">Inicio</th>
+                <th className="text-left pb-2 pr-3 font-medium">Tipo</th>
                 <th className="text-left pb-2 pr-3 font-medium">Duración</th>
                 <th className="text-left pb-2 pr-3 font-medium">Nuevos</th>
                 <th className="text-left pb-2 font-medium">Estado</th>
@@ -311,6 +313,17 @@ export default function EtlHistoryTable() {
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = expandedRows.has(run.id) ? "rgba(29,185,84,0.04)" : ""; }}
                   >
                     <td className="py-2.5 pr-3 text-white/70">{formatDate(run.started_at)}</td>
+                    <td className="py-2.5 pr-3">
+                      <span
+                        className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full"
+                        style={{
+                          background: run.run_type === "full" ? "rgba(79,142,247,0.15)" : "rgba(29,185,84,0.1)",
+                          color: run.run_type === "full" ? "#4f8ef7" : "#1DB954",
+                        }}
+                      >
+                        {run.run_type === "full" ? "Full" : "Incremental"}
+                      </span>
+                    </td>
                     <td className="py-2.5 pr-3 text-white/50">
                       {run.duration_seconds != null ? `${run.duration_seconds}s` : "—"}
                     </td>

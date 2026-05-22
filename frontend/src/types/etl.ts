@@ -22,6 +22,7 @@ export interface EtlRun {
   started_at: string;
   finished_at: string | null;
   status: "success" | "error" | "running";
+  run_type: "full" | "incremental";
   duration_seconds: number | null;
   records_extracted: number;
   records_loaded: number;
@@ -60,6 +61,7 @@ export interface EtlRunSummary {
 export interface EtlRunResponse {
   run_id?: string;
   status: "started" | "running" | "success" | "error";
+  run_type: "full" | "incremental";
   logs: string[];
   message?: string;
   summary?: EtlRunSummary;
