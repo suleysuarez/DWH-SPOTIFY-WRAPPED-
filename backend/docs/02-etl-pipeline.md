@@ -171,3 +171,39 @@ Frontend          Backend (etl.py)       EtlService        Spotify API       Pos
    │  200 {status, logs} │                    │                  │                │
    │◀────────────────────│                    │                  │                │
 ```
+
+---
+
+## Herramienta de IA Utilizada
+
+| Campo | Detalle |
+|---|---|
+| **Herramienta** | Manus AI + Claude Code |
+| **Técnica** | Prompting iterativo — diseño general con Manus, refinamiento de bugs con Claude Code |
+| **Fase** | Implementación del pipeline ETL completo (extract, transform, load, auditoría) |
+
+**Prompt principal utilizado:**
+```
+Implementa un pipeline ETL completo en Python para FastAPI que sincronice datos de
+la Spotify Web API hacia un PostgreSQL Data Warehouse.
+
+Fases requeridas (métodos estáticos en EtlService):
+EXTRACT: extract_user(), extract_top_artists(limit=50), extract_top_tracks(limit=50),
+         extract_recently_played(after=cursor_ms)
+TRANSFORM: transform_user(), transform_artists(), transform_tracks(), transform_history()
+           - En transform_history: calcular hour_of_day y day_of_week desde played_at
+           - Manejar played_at ISO 8601 con Z al final: reemplazar Z por +00:00
+           - context_type puede ser None: mapear a 'unknown'
+LOAD: load_user(), load_artists(), load_tracks(), load_history()
+      - Orden obligatorio: users → artists → tracks → history
+      - load_tracks necesita FK lookup: SELECT artist_id FROM dim_artists WHERE spotify_id = ?
+      - Deduplicación en load_history por (user_id, track_id, played_at)
+AUDIT: insert_audit_start(), update_audit_success(), update_audit_error()
+
+Sincronización incremental:
+- Leer cursor_next_ms de la última ejecución exitosa en etl_audit
+- Pasar como parámetro 'after' a recently_played (Unix milliseconds)
+- Si no hay cursor previo (primera ejecución), no pasar el parámetro after
+
+Antes de cada ETL: verificar token_expires_at < NOW() + 5min y renovar con refresh_token.
+```

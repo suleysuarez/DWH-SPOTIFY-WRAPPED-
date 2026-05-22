@@ -148,3 +148,28 @@ curl http://localhost:8000/health
 cd backend
 python -m pytest tests/ -v
 ```
+
+---
+
+## Herramienta de IA Utilizada
+
+| Campo | Detalle |
+|---|---|
+| **Herramienta** | Manus AI |
+| **Técnica** | Prompting descriptivo con rol asignado y contexto del stack |
+| **Fase** | Configuración inicial del proyecto, estructura de carpetas y variables de entorno |
+
+**Prompt utilizado:**
+```
+Actúa como un arquitecto de software senior especializado en FastAPI y PostgreSQL.
+Genera la configuración inicial completa para un proyecto llamado "Mi Spotify Wrapped":
+- Estructura de carpetas para backend FastAPI con SQLAlchemy 2.0 y Alembic
+- Variables de entorno necesarias (.env) para Spotify OAuth PKCE, JWT y Neon PostgreSQL
+- Archivo main.py con FastAPI, CORS middleware y router /v1
+- core/config.py con pydantic-settings leyendo las variables del .env
+- core/database.py con engine SQLAlchemy y get_db() dependency
+- requirements.txt con todas las dependencias
+- .gitignore correcto que excluya .env y __pycache__
+El proyecto usa: OAuth 2.0 PKCE con Spotify, JWT HS256, PostgreSQL en Neon serverless,
+star schema en schema 'dwh'.
+```

@@ -217,4 +217,43 @@ SELECT
                                WHERE user_id = <user_id>)
        AND status = 'success'
      ORDER BY started_at DESC LIMIT 1)                                    AS ultima_sincronizacion;
+
+---
+
+## Herramienta de IA Utilizada
+
+| Campo | Detalle |
+|---|---|
+| **Herramienta** | Claude Code |
+| **Técnica** | Prompting con esquema de tablas explícito y casos de uso analítico específicos |
+| **Fase** | Generación de consultas SQL analíticas para el EDA y los endpoints del backend |
+
+**Prompt utilizado:**
+```
+Genera 10 consultas SQL analíticas para un Data Warehouse de Spotify con el siguiente
+star schema en PostgreSQL (schema: dwh):
+
+- fact_listening_history (user_id FK, track_id FK, artist_id FK, played_at TIMESTAMP,
+  hour_of_day INT, day_of_week VARCHAR, context_type VARCHAR)
+- dim_artists (artist_id PK, spotify_id, name, popularity, followers_count,
+  genres TEXT[], image_url)
+- dim_tracks (track_id PK, spotify_id, name, artist_id FK, album_name,
+  duration_ms INT, popularity FLOAT, explicit BOOL, album_image_url)
+- dim_users (user_id PK, spotify_id, display_name, email, country, followers, product)
+
+Consultas requeridas:
+1. Top 10 artistas por reproducciones del usuario
+2. Top 10 canciones por reproducciones
+3. Top géneros usando UNNEST(genres) con porcentaje
+4. Distribución de escucha por hora del día (0-23)
+5. Distribución por día de la semana con label laborable/fin de semana
+6. Minutos y horas totales escuchados
+7. Historial diario últimos 30 días
+8. Artistas descubiertos por primera vez en últimos 7 días
+9. Contexto de reproducción (playlist vs album vs artista) con porcentaje
+10. Resumen general del DWH (todas las métricas en una sola query)
+
+Para cada consulta: incluir comentario de propósito, usar <user_id> como placeholder,
+ordenar resultados de forma útil.
+```
 ```

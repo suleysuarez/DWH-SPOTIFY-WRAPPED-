@@ -153,3 +153,37 @@ alembic history
 |---|---|
 | `001` | Creación inicial del star schema en `dwh` |
 | `002` | Agrega columna `image_url` a `dim_users` |
+
+---
+
+## Herramienta de IA Utilizada
+
+| Campo | Detalle |
+|---|---|
+| **Herramienta** | Manus AI |
+| **Técnica** | Prompting con especificaciones de esquema explícitas y restricciones de integridad |
+| **Fase** | Diseño del star schema y generación de modelos SQLAlchemy + migraciones Alembic |
+
+**Prompt utilizado:**
+```
+Diseña el star schema completo para un Data Warehouse personal de Spotify en PostgreSQL.
+Schema: dwh. Tablas requeridas:
+- dim_users: perfil del usuario + tokens OAuth Spotify + JWT info
+- dim_artists: artistas con popularity, followers_count, genres (ARRAY TEXT), image_url
+- dim_tracks: canciones con FK a dim_artists, duration_ms, popularity, explicit, album_image_url
+- fact_listening_history: tabla de hechos con FK a dim_users/dim_artists/dim_tracks,
+  played_at (TIMESTAMP), hour_of_day (0-23), day_of_week (Monday-Sunday), context_type
+- etl_audit: log de cada ejecución ETL con status, duration_ms, cursores de paginación
+- public.pkce_sessions: sesiones PKCE temporales para OAuth
+
+Para cada tabla genera:
+1. Modelo SQLAlchemy 2.0 con tipos correctos
+2. Migración Alembic correspondiente
+3. Justificación de cada decisión de diseño
+
+Restricciones:
+- genres debe ser ARRAY(String) de PostgreSQL
+- Deduplicación en fact_listening_history por (user_id, track_id, played_at)
+- No usar UNIQUE constraint en fact — manejar deduplicación en el ETL
+- pkce_sessions en schema public, no en dwh
+```
