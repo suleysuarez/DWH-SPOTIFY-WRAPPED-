@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, Music2, Mic2, Star, Users, Play, ExternalLink } from "lucide-react";
 import { getToken } from "@/lib/auth";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://dwh-spotify-wrapped.onrender.com";
 
 type SearchType = "all" | "artist" | "track";
 
