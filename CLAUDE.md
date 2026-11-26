@@ -101,7 +101,9 @@ VITE_API_URL=http://127.0.0.1:8000
 - `lib/api.ts` — Fetch wrapper with Bearer token injection, 401 auto-logout, typed endpoint helpers
 - `lib/auth.ts` — JWT stored in `localStorage` under key `"app_token"`; `isTokenValid()` decodes payload client-side to check `exp`
 - `hooks/useApi.ts` — Generic fetching hook with loading/error states
-- `pages/Callback.tsx` — Parses `?token=JWT` from URL, saves to localStorage, redirects to `/dashboard`
+- `pages/Callback.tsx` — Reads the one-time `?code=` from the URL, exchanges it at `POST /v1/auth/exchange`, saves the JWT
+- `pages/Wrapped.tsx` — Summary view backed by `GET /v1/history/wrapped`
+- `components/dashboard/sections/` — One file per Dashboard section; `pages/Dashboard.tsx` only composes them
 - `components/dashboard/` — `QuickStatsCards`, `TopArtistsCard`, `TopTracksCard`, `PeakHourCard`, `GenresChart`
 - `components/etl/` — `RunEtlPanel`, `DwhStatusTable`, `EtlHistoryTable`
 - `components/ui/` — shadcn/ui components + custom: `SkeletonCard`, `EmptyState`, `ErrorState`
@@ -118,7 +120,7 @@ VITE_API_URL=http://127.0.0.1:8000
 | `etl_audit` | Audit | `status` (`running`/`success`/`error`), `duration_ms`, counters per entity, `cursor_after_ms`, `cursor_next_ms` |
 | `pkce_sessions` | Auth (schema: `public`) | `state` (PK), `verifier`, `created_at` |
 
-Deduplication in `fact_listening_history` is done by querying `(user_id, track_id, played_at)` before insert — there is no DB-level unique constraint on this combination.
+Deduplication in `fact_listening_history`: a DB-level `UniqueConstraint(user_id, played_at)` (migration 001), plus a pre-insert check on the same pair in `load_history`.
 
 ### API Endpoints (all under `/v1`)
 | Method | Route | Auth | Description |
@@ -147,8 +149,8 @@ Incremental sync: uses `cursor_next_ms` from the last successful audit as the `a
 ### OAuth Flow
 1. Frontend → GET `/v1/auth/login` → receives `authorization_url`
 2. Redirect to Spotify consent screen
-3. Spotify → GET `/v1/auth/callback?code=X&state=Y` (backend) → issues JWT, redirects to `{FRONTEND_URL}/callback?token=JWT`
-4. Frontend at `/callback` saves JWT to `localStorage["app_token"]` → redirects to `/dashboard`
+3. Spotify → GET `/v1/auth/callback?code=X&state=Y` (backend) → redirects to `{FRONTEND_URL}/callback?code=XC` (one-time, 60s)
+4. Frontend at `/callback` calls `POST /v1/auth/exchange`, saves JWT to `localStorage["app_token"]` → `/dashboard`
 
 ## Key Conventions
 - All backend endpoints versioned under `/v1`

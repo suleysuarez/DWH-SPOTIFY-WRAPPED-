@@ -5,9 +5,13 @@ date: 2026-05-15
 version: 1.0
 description: Router de autenticación OAuth 2.0 PKCE con Spotify. GET /v1/auth/login genera
              el par PKCE y retorna la URL de autorización. GET /v1/auth/callback intercambia
-             el code por tokens de Spotify, carga el usuario en el DWH y emite el JWT de la app.
+             el code por tokens de Spotify, carga el usuario en el DWH y entrega al frontend un
+             código de un solo uso que POST /v1/auth/exchange cambia por el JWT de la app.
 """
 import logging
+import secrets
+from datetime import datetime, timedelta
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -21,6 +25,15 @@ from app.v1.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Los códigos de intercambio se guardan en pkce_sessions con este prefijo.
+# Un state de PKCE (token_urlsafe) nunca contiene ":", así que no se confunden.
+EXCHANGE_PREFIX = "xc:"
+EXCHANGE_TTL_SECONDS = 60
+
+
+class TokenExchangeRequest(BaseModel):
+    code: str = Field(min_length=20, max_length=100)
 
 
 @router.get("/login", response_model=AuthLoginResponse)
@@ -63,11 +76,11 @@ def callback(code: str, state: str, db: Session = Depends(get_db)):
     """
     Callback de Spotify OAuth.
     Recibe code y state como query params (GET).
-    Redirige al frontend con el JWT como query param.
+    Redirige al frontend con un código de un solo uso (nunca con el JWT).
     """
     logger.info(f"Callback recibido: state={state}")
 
-    pkce_session = db.query(PkceSessions).filter_by(state=state).first()
+    pkce_session = None if ":" in state else db.query(PkceSessions).filter_by(state=state).first()
 
     if not pkce_session:
         logger.error(f"State no encontrado: {state}")
@@ -115,10 +128,43 @@ def callback(code: str, state: str, db: Session = Depends(get_db)):
             detail=detail,
         )
 
-    # Crear JWT usando AuthService (compatible con verify_jwt_token en todos los routers)
-    jwt_token = AuthService.create_jwt_token(spotify_id)
-    logger.info(f"JWT creado para spotify_id={spotify_id}")
+    # El JWT no viaja en la URL: se entrega un código de un solo uso y corta duración.
+    exchange_code = secrets.token_urlsafe(32)
+    db.add(PkceSessions(
+        state=EXCHANGE_PREFIX + exchange_code,
+        verifier=spotify_id,
+        created_at=datetime.utcnow(),
+    ))
+    db.commit()
 
-    # Redirigir al frontend con el token
-    frontend_url = settings.FRONTEND_URL
-    return RedirectResponse(url=f"{frontend_url}/callback?token={jwt_token}")
+    # Redirigir al frontend con el código
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/callback?code={exchange_code}")
+
+
+@router.post("/exchange")
+def exchange(body: TokenExchangeRequest, db: Session = Depends(get_db)):
+    """
+    Cambia el código de un solo uso por el JWT de la aplicación.
+
+    El código se elimina al primer uso y caduca a los 60 segundos.
+    """
+    row = db.query(PkceSessions).filter(
+        PkceSessions.state == EXCHANGE_PREFIX + body.code
+    ).with_for_update().first()
+
+    invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Código inválido o expirado",
+    )
+    if not row:
+        raise invalid
+
+    spotify_id, created_at = row.verifier, row.created_at
+    db.delete(row)
+    db.commit()
+
+    if created_at is None or datetime.utcnow() - created_at > timedelta(seconds=EXCHANGE_TTL_SECONDS):
+        raise invalid
+
+    logger.info(f"JWT creado para spotify_id={spotify_id}")
+    return {"token": AuthService.create_jwt_token(spotify_id)}

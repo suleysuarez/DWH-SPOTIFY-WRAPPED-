@@ -15,6 +15,7 @@ const Callback = lazy(() => import("./pages/Callback"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Etl = lazy(() => import("./pages/Etl"));
+const Wrapped = lazy(() => import("./pages/Wrapped"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Unauthorized = lazy(() => import("./pages/Unauthorized"));
 const ServerError = lazy(() => import("./pages/ServerError"));
@@ -59,6 +60,12 @@ function Router() {
             <Route path="/dashboard">
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            </Route>
+
+            <Route path="/wrapped">
+              <ProtectedRoute>
+                <Wrapped />
               </ProtectedRoute>
             </Route>
 

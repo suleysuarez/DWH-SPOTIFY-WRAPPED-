@@ -2,7 +2,7 @@
  * Home.tsx — Página de ejemplo / placeholder (no está en el router activo).
  *
  * ⚠️  Esta página NO está registrada en App.tsx. Es una plantilla generada
- * automáticamente por el scaffolding de Manus con ejemplos de uso de componentes.
+ * automáticamente por el scaffolding inicial con ejemplos de uso de componentes.
  * No tiene función en el flujo del DWH; se conserva como referencia.
  */
 import { Button } from "@/components/ui/button";

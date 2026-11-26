@@ -66,32 +66,38 @@ La tabla `fact_listening_history` tiene como clave primaria un `SERIAL id` autoi
 
 Spotify registra `played_at` con precisión de milisegundos, pero **dos usuarios distintos pueden escuchar canciones exactamente al mismo timestamp**. Incluso para un mismo usuario, la API de Spotify puede devolver registros con `played_at` idéntico en casos donde el cliente de Spotify registró la reproducción en el mismo instante (por ejemplo, al presionar "siguiente" rápidamente o al sincronizar múltiples dispositivos).
 
-**Por qué `(user_id, played_at)` tampoco es suficiente:**
+**Por qué la unicidad es `(user_id, played_at)`:**
 
-Un mismo usuario podría reproducir dos canciones distintas con el mismo `played_at` reportado por Spotify (falla de precisión del cliente, salto rápido entre canciones). Esto no es teórico — lo observamos en los datos: el endpoint `/me/player/recently-played` devuelve ocasionalmente registros con timestamps solapados.
-
-**La combinación correcta para deduplicación:**
+Dos usuarios distintos sí pueden compartir un `played_at`, pero un mismo usuario no puede iniciar dos reproducciones en el mismo instante. Por eso la combinación que identifica una reproducción es:
 
 ```sql
-(user_id, track_id, played_at)
+(user_id, played_at)
 ```
 
-Esta es la combinación que usa el pipeline para detectar duplicados antes de insertar:
+La base de datos la garantiza con una restricción única creada en la migración `001_initial_schema.py`:
 
 ```python
-existing = db.query(FactListeningHistory).filter_by(
-    user_id=user_id,
-    track_id=track_id,
-    played_at=played_at
-).first()
-if not existing:
-    db.add(new_record)
+sa.UniqueConstraint('user_id', 'played_at')
 ```
 
-**¿Por qué no es un UNIQUE constraint en la DB?**
+Además, el ETL comprueba la misma combinación antes de insertar:
 
-Se optó por deduplicación programática en la capa ETL en lugar de un constraint de base de datos por dos razones:
-1. El constraint generaría un error de integridad que abortaría toda la transacción si Spotify devuelve un duplicado — la deduplicación en Python permite continuar con los demás registros.
-2. Existe el caso teórico de que un usuario escuche la misma canción dos veces en el mismo segundo (reproducción en loop), que sería un falso duplicado bajo ese constraint pero una reproducción legítima.
+```python
+existing_record = db.query(FactListeningHistory).filter_by(
+    user_id=user.user_id,
+    played_at=item["played_at"],
+).first()
 
-El `id SERIAL` como PK es la elección correcta: es inmutable, sin semántica de negocio, y permite que la lógica de deduplicación sea responsabilidad explícita del ETL y no del motor de base de datos.
+if existing_record:
+    skipped_count += 1
+    continue
+```
+
+**¿Por qué las dos capas?**
+
+1. La comprobación en Python permite omitir los duplicados que Spotify vuelve a entregar y seguir con los demás registros, sin provocar un error de integridad que aborte la transacción.
+2. La restricción en la base de datos es la garantía final: protege la tabla aunque dos ejecuciones del ETL coincidan o los datos se carguen por otra vía.
+
+`track_id` no forma parte de la clave: añadirlo permitiría dos canciones distintas en el mismo instante para el mismo usuario.
+
+El `id SERIAL` como PK es la elección correcta: es inmutable, sin semántica de negocio, y deja la unicidad de negocio expresada aparte, en la restricción `(user_id, played_at)`.

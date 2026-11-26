@@ -282,3 +282,85 @@ def get_hour_distribution(
         for h in range(24)
     ]
     return {"hours": hours}
+
+
+@router.get("/wrapped")
+def get_wrapped(
+    current_user: DimUsers = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Resumen estilo Wrapped del usuario: minutos, artista y canción favoritos y hora pico.
+
+    Los minutos son una estimación: se suma la duración completa de cada canción
+    reproducida. peak_hour va en UTC; el frontend lo convierte a hora local.
+    """
+    uid = current_user.user_id
+
+    totals = db.query(
+        func.count(FactListeningHistory.id),
+        func.sum(DimTracks.duration_ms),
+        func.min(FactListeningHistory.played_at),
+        func.max(FactListeningHistory.played_at),
+    ).join(
+        DimTracks, FactListeningHistory.track_id == DimTracks.track_id
+    ).filter(FactListeningHistory.user_id == uid).first()
+    total_plays, total_ms, first_play, last_play = totals or (0, 0, None, None)
+
+    artist = db.query(
+        FactListeningHistory.artist_id,
+        DimArtists.name,
+        DimArtists.image_url,
+        func.count(FactListeningHistory.id).label("play_count"),
+        func.sum(DimTracks.duration_ms),
+    ).join(
+        DimArtists, FactListeningHistory.artist_id == DimArtists.artist_id
+    ).join(
+        DimTracks, FactListeningHistory.track_id == DimTracks.track_id
+    ).filter(FactListeningHistory.user_id == uid).group_by(
+        FactListeningHistory.artist_id, DimArtists.name, DimArtists.image_url,
+    ).order_by(desc("play_count"), DimArtists.name).first()
+
+    track = db.query(
+        FactListeningHistory.track_id,
+        DimTracks.name,
+        DimArtists.name,
+        DimTracks.album_image_url,
+        func.count(FactListeningHistory.id).label("play_count"),
+    ).join(
+        DimTracks, FactListeningHistory.track_id == DimTracks.track_id
+    ).join(
+        DimArtists, FactListeningHistory.artist_id == DimArtists.artist_id
+    ).filter(FactListeningHistory.user_id == uid).group_by(
+        FactListeningHistory.track_id, DimTracks.name, DimArtists.name, DimTracks.album_image_url,
+    ).order_by(desc("play_count"), DimTracks.name).first()
+
+    hour = db.query(
+        FactListeningHistory.hour_of_day,
+        func.count(FactListeningHistory.id).label("play_count"),
+    ).filter(
+        FactListeningHistory.user_id == uid,
+        FactListeningHistory.hour_of_day.isnot(None),
+    ).group_by(FactListeningHistory.hour_of_day).order_by(
+        desc("play_count"), FactListeningHistory.hour_of_day
+    ).first()
+
+    return {
+        "total_plays": total_plays or 0,
+        "total_minutes": round((total_ms or 0) / 60000),
+        "first_play": first_play.isoformat() + "+00:00" if first_play else None,
+        "last_play": last_play.isoformat() + "+00:00" if last_play else None,
+        "top_artist": {
+            "name": artist[1],
+            "image_url": artist[2],
+            "play_count": artist[3],
+            "minutes": round((artist[4] or 0) / 60000),
+        } if artist else None,
+        "top_track": {
+            "name": track[1],
+            "artist_name": track[2],
+            "image_url": track[3],
+            "play_count": track[4],
+        } if track else None,
+        "peak_hour": {"hour_utc": hour[0], "play_count": hour[1]} if hour else None,
+    }

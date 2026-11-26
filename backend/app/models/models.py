@@ -94,7 +94,7 @@ class FactListeningHistory(Base):
     durante la fase Transform del ETL a partir de `played_at`.
     `context_type` puede ser "playlist", "album", "artist" o "unknown".
 
-    Deduplicación: antes de insertar se verifica (user_id, track_id, played_at).
+    Deduplicación: antes de insertar se verifica (user_id, played_at).
     La migración 001 crea además una UniqueConstraint(user_id, played_at).
     """
     __tablename__ = "fact_listening_history"

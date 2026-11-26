@@ -93,6 +93,9 @@ def run_etl(
             )
             access_token = new_tokens["access_token"]
             current_user.spotify_access_token = access_token
+            current_user.spotify_refresh_token = (
+                new_tokens.get("refresh_token") or current_user.spotify_refresh_token
+            )
             db.commit()
             logger.info("Access token de Spotify renovado exitosamente")
         except Exception as refresh_err:
@@ -277,6 +280,11 @@ def backfill_tracks(
                 settings.SPOTIFY_CLIENT_SECRET,
             )
             access_token = new_tokens["access_token"]
+            current_user.spotify_access_token = access_token
+            current_user.spotify_refresh_token = (
+                new_tokens.get("refresh_token") or current_user.spotify_refresh_token
+            )
+            db.commit()
         except Exception:
             pass
 
@@ -480,6 +488,9 @@ def backfill_artists(
             )
             access_token = new_tokens["access_token"]
             current_user.spotify_access_token = access_token
+            current_user.spotify_refresh_token = (
+                new_tokens.get("refresh_token") or current_user.spotify_refresh_token
+            )
             db.commit()
         except Exception as e:
             logger.warning(f"Token refresh falló en backfill: {e}")

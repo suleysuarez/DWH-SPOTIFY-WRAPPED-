@@ -45,7 +45,7 @@ Autoras/es: Suley Suárez y Jhonatan Vera | Profesor: Juan Alejandro Carrillo Ja
 1. Frontend → `GET /v1/auth/login` → recibe `authorization_url`
 2. Redirección a Spotify (el backend genera `code_verifier` y `code_challenge`)
 3. Spotify → `GET /v1/auth/callback?code=X&state=Y` → backend crea JWT
-4. Frontend en `/callback?token=JWT` guarda en `localStorage["app_token"]` → `/dashboard`
+4. Frontend en `/callback?code=XC` → `POST /v1/auth/exchange` → guarda el JWT en `localStorage["app_token"]` → `/dashboard`
 
 ---
 
@@ -122,7 +122,8 @@ pnpm dev   # puerto 3000
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | GET | `/auth/login` | No | URL de autorización OAuth |
-| GET | `/auth/callback` | No | Intercambia code por JWT |
+| GET | `/auth/callback` | No | Recibe el code de Spotify y redirige con un código de un solo uso |
+| POST | `/auth/exchange` | No | Cambia el código de un solo uso (60 s) por el JWT |
 | GET | `/artists/top` | JWT | Top 10 artistas del DWH |
 | GET | `/tracks/top` | JWT | Top 10 canciones del DWH |
 | GET | `/history/peak-hour` | JWT | Hora pico de escucha |
@@ -130,10 +131,21 @@ pnpm dev   # puerto 3000
 | GET | `/history/genres` | JWT | Top géneros musicales |
 | GET | `/history/stats` | JWT | Stats rápidas (conteos, última sync) |
 | GET | `/history/recently-played` | JWT | Reproducciones recientes |
+| GET | `/history/wrapped` | JWT | Resumen: minutos, artista y canción favoritos, hora pico |
 | GET | `/profile/me` | JWT | Perfil del usuario (desde DWH) |
 | POST | `/etl/run` | JWT | Disparar pipeline ETL completo |
 | GET | `/etl/status` | JWT | Estado del DWH + auditoría |
 | GET | `/etl/history` | JWT | Historial paginado de ejecuciones |
+
+---
+
+## Sincronización automática
+
+`.github/workflows/sync-etl.yml` ejecuta `backend/scripts/sync_etl.py` cada 2 h 30 min contra la base de producción.
+También se puede lanzar a mano desde **Actions → Sincronizar ETL → Run workflow**.
+
+Secretos necesarios (**Settings → Secrets and variables → Actions**), con los mismos valores que Render:
+`DATABASE_URL`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `JWT_SECRET`, `LASTFM_API_KEY`.
 
 ---
 
@@ -186,6 +198,6 @@ mi-spotify-wrapped-dwh/
 │       ├── contexts/     # ThemeContext
 │       └── App.tsx, main.tsx
 ├── server/               # Express — sirve build Vite en producción
-├── shared/               # Constantes compartidas (legado Manus)
+├── shared/               # Constantes compartidas (scaffold inicial)
 └── vite.config.ts        # Root Vite: root=frontend/, aliases @/@shared
 ```
