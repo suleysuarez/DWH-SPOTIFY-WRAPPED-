@@ -6,6 +6,7 @@
  *
  * El gráfico usa Recharts AreaChart con gradiente verde Spotify.
  * Una ReferenceLine vertical marca la hora pico.
+ * Las horas llegan en UTC y se muestran en la hora local del navegador.
  */
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -14,6 +15,7 @@ import { Skeleton } from "@/components/ui/SkeletonCard";
 import ErrorState from "@/components/ui/ErrorState";
 import { Clock } from "lucide-react";
 import { getToken } from "@/lib/auth";
+import { formatHour, toLocalHour } from "@/lib/time";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string) || "https://dwh-spotify-wrapped.onrender.com";
 
@@ -110,8 +112,17 @@ export default function PeakHourCard() {
         if (!peakRes.ok || !distRes.ok) throw new Error("Error al cargar datos");
         const [peakJson, distJson] = await Promise.all([peakRes.json(), distRes.json()]);
         if (!cancelled) {
-          setPeak(peakJson);
-          setHours(distJson.hours ?? []);
+          // Sin reproducciones el backend responde hora 0: no hay pico que mostrar.
+          setPeak(peakJson.play_count > 0 ? { ...peakJson, hour: toLocalHour(peakJson.hour) } : null);
+          const points: HourPoint[] = distJson.hours ?? [];
+          setHours(
+            points
+              .map((p) => {
+                const hour = toLocalHour(p.hour);
+                return { ...p, hour, label: formatHour(hour) };
+              })
+              .sort((a, b) => a.hour - b.hour),
+          );
         }
       } catch (e: any) {
         if (!cancelled) setError(e.message ?? "Error inesperado");
@@ -145,7 +156,7 @@ export default function PeakHourCard() {
           <div className="text-right">
             <p className="text-xs text-white/40">Hora pico</p>
             <p className="text-lg font-black" style={{ color: "#1DB954", fontFamily: "DM Sans, sans-serif" }}>
-              {String(peak.hour).padStart(2, "0")}:00
+              {formatHour(peak.hour)}
             </p>
           </div>
         )}
@@ -220,7 +231,7 @@ export default function PeakHourCard() {
               <Tooltip content={<CustomTooltip />} cursor={{ stroke: "rgba(29,185,84,0.2)", strokeWidth: 1 }} />
               {peakHour !== null && (
                 <ReferenceLine
-                  x={String(peakHour).padStart(2, "0") + ":00"}
+                  x={formatHour(peakHour)}
                   stroke="rgba(29,185,84,0.5)"
                   strokeDasharray="3 3"
                   label={{ value: "pico", fill: "rgba(29,185,84,0.7)", fontSize: 9, position: "top" }}
