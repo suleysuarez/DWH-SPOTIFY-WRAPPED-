@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import ConnectingScreen from "@/components/ConnectingScreen";
 
 const API_URL = (import.meta.env.VITE_API_URL as string) || "https://dwh-spotify-wrapped.onrender.com";
 const BACKEND_LOGIN_URL = `${API_URL}/v1/auth/login`;
@@ -69,10 +71,32 @@ function VideoPanel({ src, label, side }: { src: string; label: string; side: "l
 }
 
 export default function Login() {
+  const [connecting, setConnecting] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  // Si se vuelve desde Spotify con el botón "atrás", se quita la pantalla de transición.
+  useEffect(() => {
+    const reset = () => setConnecting(false);
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
+
   const handleConnect = async () => {
-    const res = await fetch(BACKEND_LOGIN_URL);
-    const data = await res.json();
-    window.location.href = data.authorization_url;
+    setFailed(false);
+    setConnecting(true);
+    try {
+      // Mínimo 2,5 s para que se alcance a leer el aviso antes de salir hacia Spotify.
+      const [res] = await Promise.all([
+        fetch(BACKEND_LOGIN_URL),
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ]);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      window.location.href = data.authorization_url;
+    } catch {
+      setConnecting(false);
+      setFailed(true);
+    }
   };
 
   return (
@@ -80,6 +104,8 @@ export default function Login() {
       className="h-screen flex overflow-hidden"
       style={{ background: "#121212" }}
     >
+      {connecting && <ConnectingScreen />}
+
       {/* ── Video izquierdo — Suley ── */}
       <VideoPanel src="/videos/suley.mp4" label="Suley Suárez" side="left" />
 
@@ -179,6 +205,12 @@ export default function Login() {
               Conectar con Spotify
             </Button>
           </motion.div>
+
+          {failed && (
+            <p role="alert" className="text-xs text-red-400 mt-4">
+              No se pudo conectar con el servidor. Intenta de nuevo.
+            </p>
+          )}
 
           <motion.p {...fadeUp(0.62)} className="text-xs text-white/25 mt-6">
             Al conectar, autorizas el acceso de lectura a tu historial de Spotify.

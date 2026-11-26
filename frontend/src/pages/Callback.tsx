@@ -1,47 +1,49 @@
 /**
  * Callback.tsx — Página de callback OAuth post-autenticación.
  *
- * Recibe el JWT que el backend agrega como query param tras el OAuth de Spotify:
- *   `/callback?token=<jwt>`
+ * El backend redirige aquí con un código de un solo uso: `/callback?code=<codigo>`.
  *
  * Flujo al montar el componente:
- * 1. Lee `?token` de la URL con URLSearchParams.
- * 2. Llama a `saveToken(token)` → guarda en localStorage["app_token"].
- * 3. Limpia la URL con `history.replaceState` para eliminar el token del historial.
- * 4. Tras 800ms redirige a /dashboard (ProtectedRoute validará el token).
+ * 1. Lee `?code` y limpia la URL con `history.replaceState`.
+ * 2. Lo cambia por el JWT con POST /v1/auth/exchange (el JWT nunca va en la URL).
+ * 3. Guarda el JWT en localStorage["app_token"] y va a /dashboard.
  *
- * Si no hay token en la URL, igual redirige a /dashboard y ProtectedRoute
- * enviará al usuario a /login.
+ * Sin código, o si el intercambio falla, vuelve a /login.
  *
  * Diseño: pantalla de carga con logo animado y spinner. Fondo #121212.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { saveToken } from "@/lib/auth";
+import { endpoints } from "@/lib/api";
 import { Music2 } from "lucide-react";
 
 export default function Callback() {
   const [, setLocation] = useLocation();
 
-  useEffect(() => {
-    // Extract token from URL search params
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
+  // El código solo sirve una vez: evita un segundo intercambio si el efecto se repite.
+  const exchanged = useRef(false);
 
-    if (token) {
-      // Save to localStorage
-      saveToken(token);
-      // Clean URL (remove query params from browser history)
-      window.history.replaceState({}, document.title, window.location.pathname);
+  useEffect(() => {
+    if (exchanged.current) return;
+    exchanged.current = true;
+
+    const code = new URLSearchParams(window.location.search).get("code");
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    if (!code) {
+      setLocation("/login");
+      return;
     }
 
-    // Redirect to dashboard (with or without token — ProtectedRoute handles missing token)
-    const timer = setTimeout(() => {
-      setLocation("/dashboard");
-    }, 800);
-
-    return () => clearTimeout(timer);
+    endpoints.auth
+      .exchange(code)
+      .then(({ token }) => {
+        saveToken(token);
+        setLocation("/dashboard");
+      })
+      .catch(() => setLocation("/login"));
   }, [setLocation]);
 
   return (

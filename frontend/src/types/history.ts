@@ -39,3 +39,13 @@ export interface QuickStats {
   top_track_artist_image?: string | null;
   top_track_artist_id?: string | null;
 }
+
+export interface WrappedSummary {
+  total_plays: number;
+  total_minutes: number;
+  first_play: string | null;
+  last_play: string | null;
+  top_artist: { name: string; image_url: string | null; play_count: number; minutes: number } | null;
+  top_track: { name: string; artist_name: string; image_url: string | null; play_count: number } | null;
+  peak_hour: { hour_utc: number; play_count: number } | null;
+}

@@ -39,7 +39,7 @@ Inicia el flujo OAuth 2.0 PKCE con Spotify. No requiere autenticación.
 1. El frontend llama a este endpoint y obtiene `authorization_url`.
 2. Redirige al usuario a esa URL (Spotify consent screen).
 3. Spotify redirige al callback del backend con `?code=X&state=Y`.
-4. El backend intercambia el code por tokens y redirige al frontend con `?token=JWT`.
+4. El backend intercambia el code por tokens y redirige al frontend con `?code=XC` (un solo uso, 60 s). El frontend lo cambia por el JWT en `POST /v1/auth/exchange`.
 5. El frontend guarda el JWT en `localStorage["app_token"]`.
 
 ---
@@ -53,7 +53,7 @@ Recibe el callback de Spotify. **No invocar manualmente.**
 | `code` | string | Authorization code de Spotify |
 | `state` | string | State CSRF para validar la sesión PKCE |
 
-**Respuesta:** Redirección `302` a `{FRONTEND_URL}/callback?token=JWT`.
+**Respuesta:** Redirección `302` a `{FRONTEND_URL}/callback?code=XC`.
 
 ---
 

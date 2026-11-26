@@ -8,7 +8,7 @@
  */
 
 import { logout } from "@/lib/auth";
-import { LayoutDashboard, User, Database, LogOut } from "lucide-react";
+import { LayoutDashboard, User, Database, LogOut, Sparkles } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
 
 const navLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/wrapped", label: "Wrapped", icon: Sparkles },
   { href: "/profile", label: "Perfil", icon: User },
   { href: "/etl", label: "ETL", icon: Database },
 ];

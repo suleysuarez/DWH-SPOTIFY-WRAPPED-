@@ -128,7 +128,7 @@ Por cada canción:
 
 Por cada reproducción:
 1. Busca el `DimTracks` por `spotify_track_id`. Si no existe, omite el registro.
-2. Verifica duplicado por `(user_id, track_id, played_at)`. Si ya existe, omite.
+2. Verifica duplicado por `(user_id, played_at)`, la misma combinación de la restricción única en la base de datos. Si ya existe, omite.
 3. Si es nuevo: inserta `FactListeningHistory`.
 
 ---

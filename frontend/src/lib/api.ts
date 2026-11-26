@@ -114,10 +114,13 @@ export const api = {
 import type { UserProfile } from "@/types/user";
 import type { TopArtistsResponse } from "@/types/artist";
 import type { TopTracksResponse } from "@/types/track";
-import type { PeakHour, GenresResponse, QuickStats } from "@/types/history";
+import type { PeakHour, GenresResponse, QuickStats, WrappedSummary } from "@/types/history";
 import type { EtlStatusResponse, EtlRunResponse } from "@/types/etl";
 
 export const endpoints = {
+  auth: {
+    exchange: (code: string) => api.post<{ token: string }>("/v1/auth/exchange", { code }),
+  },
   profile: {
     me: () => api.get<UserProfile>("/v1/profile/me"),
   },
@@ -131,6 +134,7 @@ export const endpoints = {
     peakHour: () => api.get<PeakHour>("/v1/history/peak-hour"),
     genres: () => api.get<GenresResponse>("/v1/history/genres"),
     quickStats: () => api.get<QuickStats>("/v1/history/stats"),
+    wrapped: () => api.get<WrappedSummary>("/v1/history/wrapped"),
   },
   etl: {
     status: () => api.get<EtlStatusResponse>("/v1/etl/status"),

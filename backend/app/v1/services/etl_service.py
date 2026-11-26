@@ -825,7 +825,7 @@ class EtlService:
     @staticmethod
     def load_history(db: Session, spotify_user_id: str, history_data: List[Dict[str, Any]], spotify_token: Optional[str] = None) -> Tuple[int, int]:
         """
-        Inserta registros de reproducción en fact_listening_history, deduplicando por (user_id, track_id, played_at).
+        Inserta registros de reproducción en fact_listening_history, deduplicando por (user_id, played_at).
 
         Args:
             db (Session): Sesión de SQLAlchemy.

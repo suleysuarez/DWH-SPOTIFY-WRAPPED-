@@ -13,7 +13,7 @@ frontend/src/
 ├── App.tsx                     # Rutas Wouter + ThemeProvider + ErrorBoundary
 ├── main.tsx                    # Punto de entrada React
 ├── index.css                   # Estilos globales (glass-card, skeleton-shimmer, etc.)
-├── const.ts                    # Re-exportaciones de shared/const (legado Manus)
+├── const.ts                    # Re-exportaciones de shared/const (scaffold inicial)
 │
 ├── pages/
 │   ├── Login.tsx               # Pantalla de login — redirige a /v1/auth/login
@@ -22,7 +22,7 @@ frontend/src/
 │   ├── Profile.tsx             # Perfil de usuario (datos del DWH)
 │   ├── Etl.tsx                 # Panel ETL: RunEtlPanel + DwhStatusTable + EtlHistoryTable
 │   ├── NotFound.tsx            # 404
-│   └── Home.tsx                # ⚠️ LEGACY — no registrada en App.tsx (scaffold Manus)
+│   └── Home.tsx                # ⚠️ LEGACY — no registrada en App.tsx (scaffold inicial)
 │
 ├── components/
 │   ├── layout/

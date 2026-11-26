@@ -78,7 +78,7 @@ frontend/src/
 5. Spotify → GET /v1/auth/callback?code=X&state=Y  (backend)
         │
         ▼
-6. Backend intercambia code → JWT → redirect /callback?token=JWT
+6. Backend intercambia code → JWT → redirect /callback?code=XC → POST /v1/auth/exchange → JWT
         │
         ▼
 7. Callback.tsx → localStorage["app_token"] = JWT → navigate("/dashboard")

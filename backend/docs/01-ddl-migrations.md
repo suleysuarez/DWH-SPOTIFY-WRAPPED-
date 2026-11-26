@@ -93,7 +93,7 @@ Tabla de hechos. Cada fila es una reproducción de una canción por un usuario.
 | `day_of_week` | VARCHAR(10) | Día de la semana (Monday…Sunday) |
 | `context_type` | VARCHAR(50) | Contexto: playlist, album, artist, unknown |
 
-**Deduplicación:** antes de insertar se verifica que no exista `(user_id, track_id, played_at)`. No hay constraint UNIQUE en DB para esta combinación.
+**Deduplicación:** la base de datos tiene `UNIQUE (user_id, played_at)` (migración 001) y el ETL comprueba esa misma combinación antes de insertar.
 
 ### `etl_audit`
 

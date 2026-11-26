@@ -1,7 +1,7 @@
 /**
- * const.ts — Re-exportaciones y constantes del frontend (legado Manus).
+ * const.ts — Re-exportaciones y constantes del frontend (scaffold inicial).
  *
- * Re-exporta COOKIE_NAME y ONE_YEAR_MS de shared/const.ts — constantes del portal Manus
+ * Re-exporta COOKIE_NAME y ONE_YEAR_MS de shared/const.ts — constantes del scaffold inicial
  * que no se usan en el flujo OAuth activo (el auth usa JWT en localStorage["app_token"]).
  *
  * getLoginUrl() construye la URL de un portal OAuth genérico (VITE_OAUTH_PORTAL_URL).
