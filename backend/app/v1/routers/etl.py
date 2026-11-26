@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.models.models import DimUsers, EtlAudit, FactListeningHistory, DimArtists, DimTracks
 from app.v1.services.auth_service import AuthService
 from app.v1.services.etl_service import EtlService
+from app.v1.services.genre_overrides import apply_genre_overrides
 from app.v1.services.spotify_client import SpotifyClient
 
 logger = logging.getLogger(__name__)
@@ -195,6 +196,11 @@ def run_etl(
                 logs.append(f"Géneros actualizados via Last.fm: {genres_updated}")
         else:
             logs.append("ETL incremental: refresh completo de Spotify omitido")
+
+        # Al final: restaura los géneros revisados a mano que los pasos anteriores hayan sobrescrito.
+        genres_fixed = apply_genre_overrides(db)
+        if genres_fixed:
+            logs.append(f"Géneros revisados restaurados: {genres_fixed}")
 
         logs.append(f"Cargado: {artists_new} artistas nuevos, {tracks_new} canciones nuevas, {history_new} historial nuevo")
 
