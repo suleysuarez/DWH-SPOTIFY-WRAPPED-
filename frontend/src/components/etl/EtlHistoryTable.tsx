@@ -16,6 +16,7 @@
  */
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Skeleton } from "@/components/ui/SkeletonCard";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getToken } from "@/lib/auth";
 import { API_URL } from "@/lib/api";
 import { CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, Filter, ChevronRight } from "lucide-react";
@@ -266,18 +267,22 @@ export default function EtlHistoryTable() {
         </div>
         <div className="flex items-center gap-1">
           <Filter className="w-3 h-3 text-white/30" />
-          <select
-            aria-label="Filtrar por estado"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs rounded-lg px-2 py-1 border-0 outline-none cursor-pointer"
-            style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)" }}
-          >
-            <option value="">Todas</option>
-            <option value="success">Exitosas</option>
-            <option value="error">Con error</option>
-            <option value="running">En curso</option>
-          </select>
+          {/* Radix no admite value="": "all" representa "sin filtro". */}
+          <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
+            <SelectTrigger
+              size="sm"
+              aria-label="Filtrar por estado"
+              className="min-w-[120px] text-xs text-white/80 rounded-full border-white/10 bg-white/5 hover:bg-white/10 cursor-pointer"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end" className="rounded-xl border-white/10 bg-[#1f1f1f] text-white">
+              <SelectItem value="all" className="text-xs text-white/70 cursor-pointer focus:bg-[#1DB954]/20 focus:text-white">Todas</SelectItem>
+              <SelectItem value="success" className="text-xs text-white/70 cursor-pointer focus:bg-[#1DB954]/20 focus:text-white">Exitosas</SelectItem>
+              <SelectItem value="error" className="text-xs text-white/70 cursor-pointer focus:bg-[#1DB954]/20 focus:text-white">Con error</SelectItem>
+              <SelectItem value="running" className="text-xs text-white/70 cursor-pointer focus:bg-[#1DB954]/20 focus:text-white">En curso</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
