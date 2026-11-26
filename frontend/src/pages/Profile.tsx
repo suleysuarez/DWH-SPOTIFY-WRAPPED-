@@ -5,8 +5,7 @@ import type { UserProfile } from "@/types/user";
 import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import ErrorState from "@/components/ui/ErrorState";
 import Tilt3D from "@/components/ui/Tilt3D";
-import { ExternalLink, Mail, Users, Crown, Star, Eye, EyeOff, MapPin } from "lucide-react";
-import { useState } from "react";
+import { ExternalLink, Mail, Users, Crown, Star, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 
 const EASE = [0.22, 1, 0.36, 1] as [number, number, number, number];
@@ -18,7 +17,6 @@ const fadeUp = (i: number) => ({
 
 export default function Profile() {
   const { data: user, loading, error, refetch } = useApi<UserProfile>(endpoints.profile.me);
-  const [showId, setShowId] = useState(false);
 
   const spotifyUrl = user?.spotify_id
     ? `https://open.spotify.com/user/${user.spotify_id}`
@@ -148,7 +146,7 @@ export default function Profile() {
                   </Tilt3D>
                 </motion.div>
 
-                <motion.div {...fadeUp(7)}>
+                <motion.div {...fadeUp(7)} style={{ gridColumn: "1 / -1" }}>
                   <Tilt3D intensity={7} style={{ background: "linear-gradient(135deg, rgba(29,185,84,0.1), rgba(29,185,84,0.03))", border: "1px solid rgba(29,185,84,0.22)", borderRadius: 16, padding: "20px 22px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                       <div style={{ width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(29,185,84,0.15)" }}>
@@ -161,26 +159,6 @@ export default function Profile() {
                     </p>
                   </Tilt3D>
                 </motion.div>
-
-                <motion.div {...fadeUp(8)}>
-                  <Tilt3D intensity={7} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "20px 22px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.06)" }}>
-                          <span style={{ fontSize: 9, fontWeight: 900, color: "rgba(255,255,255,0.3)" }}>ID</span>
-                        </div>
-                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>Spotify ID</span>
-                      </div>
-                      <button type="button" onClick={() => setShowId(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", display: "flex", padding: 0 }}>
-                        {showId ? <EyeOff style={{ width: 13, height: 13 }} /> : <Eye style={{ width: 13, height: 13 }} />}
-                      </button>
-                    </div>
-                    <p style={{ fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.4)", wordBreak: "break-all", lineHeight: 1.6 }}>
-                      {showId ? (user.spotify_id || "—") : "•".repeat(Math.min(user.spotify_id?.length ?? 8, 24))}
-                    </p>
-                  </Tilt3D>
-                </motion.div>
-
               </div>
             </div>
           )}
