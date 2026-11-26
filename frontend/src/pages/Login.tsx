@@ -2,7 +2,8 @@ import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
-const BACKEND_LOGIN_URL = "http://127.0.0.1:8000/v1/auth/login";
+const API_URL = (import.meta.env.VITE_API_URL as string) || "https://dwh-spotify-wrapped.onrender.com";
+const BACKEND_LOGIN_URL = `${API_URL}/v1/auth/login`;
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as [number, number, number, number];
 
