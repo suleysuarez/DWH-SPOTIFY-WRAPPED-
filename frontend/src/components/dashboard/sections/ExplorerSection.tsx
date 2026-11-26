@@ -29,8 +29,8 @@ export default function ExplorerSection({ totalArtists, totalPlays, loading }: {
         </div>
 
         {/* Video decorativo: piano */}
-        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "44%", zIndex: 1, mixBlendMode: "screen" }}>
-          <video autoPlay loop muted playsInline aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center right" }}>
+        <div style={{ position: "absolute", right: "1%", top: 0, bottom: 0, width: "60%", zIndex: 1, mixBlendMode: "screen", display: "flex", alignItems: "center" }}>
+          <video autoPlay loop muted playsInline aria-hidden="true" style={{ width: "100%", aspectRatio: "16 / 9", objectFit: "contain", maskImage: "radial-gradient(ellipse 54% 54% at 50% 50%, #000 78%, transparent 100%)", WebkitMaskImage: "radial-gradient(ellipse 54% 54% at 50% 50%, #000 78%, transparent 100%)" }}>
             <source src="/videos/piano.mp4" type="video/mp4" />
           </video>
         </div>
