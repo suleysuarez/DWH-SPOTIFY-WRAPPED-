@@ -11,16 +11,15 @@
  *   - El filtro de status (select) reinicia la lista al cambiar.
  *   - Cada fila es expandible para ver el detalle completo de la ejecución.
  *
- * Nota: usa fetch directo con getToken() en lugar de lib/api.ts, y tiene
- * hardcodeado `API_BASE = "http://127.0.0.1:8000"`.
+ * Nota: usa fetch directo con getToken(); la dirección del backend es API_URL de lib/api.ts.
  * La fecha se formatea con `es-CO` locale y timezone America/Bogota.
  */
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Skeleton } from "@/components/ui/SkeletonCard";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getToken } from "@/lib/auth";
+import { API_URL } from "@/lib/api";
 import { CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, Filter, ChevronRight } from "lucide-react";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 interface EtlRun {
   id: number;
@@ -83,7 +82,7 @@ function DetailPanel({ run }: { run: EtlRun }) {
     setShowTracks(true);
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE}/v1/etl/${run.id}/tracks`, {
+      const res = await fetch(`${API_URL}/v1/etl/${run.id}/tracks`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -212,7 +211,7 @@ export default function EtlHistoryTable() {
         offset: String(offset),
       });
       if (filter) params.set("status", filter);
-      const res = await fetch(`${API_BASE}/v1/etl/history?${params}`, {
+      const res = await fetch(`${API_URL}/v1/etl/history?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
@@ -268,18 +267,22 @@ export default function EtlHistoryTable() {
         </div>
         <div className="flex items-center gap-1">
           <Filter className="w-3 h-3 text-white/30" />
-          <select
-            aria-label="Filtrar por estado"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs rounded-lg px-2 py-1 border-0 outline-none cursor-pointer"
-            style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)" }}
-          >
-            <option value="">Todas</option>
-            <option value="success">Exitosas</option>
-            <option value="error">Con error</option>
-            <option value="running">En curso</option>
-          </select>
+          {/* Radix no admite value="": "all" representa "sin filtro". */}
+          <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
+            <SelectTrigger
+              size="sm"
+              aria-label="Filtrar por estado"
+              className="min-w-[120px] text-xs text-white/80 rounded-full border-white/10 bg-white/5 hover:bg-white/10 cursor-pointer"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end" className="rounded-xl border-white/10 bg-[#1f1f1f] text-white">
+              <SelectItem value="all" className="text-xs text-white/70 cursor-pointer focus:bg-[#1DB954]/20 focus:text-white">Todas</SelectItem>
+              <SelectItem value="success" className="text-xs text-white/70 cursor-pointer focus:bg-[#1DB954]/20 focus:text-white">Exitosas</SelectItem>
+              <SelectItem value="error" className="text-xs text-white/70 cursor-pointer focus:bg-[#1DB954]/20 focus:text-white">Con error</SelectItem>
+              <SelectItem value="running" className="text-xs text-white/70 cursor-pointer focus:bg-[#1DB954]/20 focus:text-white">En curso</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

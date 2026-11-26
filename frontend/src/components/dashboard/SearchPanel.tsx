@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, Music2, Mic2, Star, Users, Play, ExternalLink } from "lucide-react";
 import { getToken } from "@/lib/auth";
-
-const API_BASE = import.meta.env.VITE_API_URL || "https://dwh-spotify-wrapped.onrender.com";
+import { API_URL } from "@/lib/api";
 
 type SearchType = "all" | "artist" | "track";
 
@@ -217,7 +216,7 @@ export default function SearchPanel() {
       try {
         const token = getToken();
         const params = new URLSearchParams({ q: q.trim(), type, limit: "10" });
-        const res = await fetch(`${API_BASE}/v1/search?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`${API_URL}/v1/search?${params}`, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) return;
         const data = await res.json();
         setArtists(data.artists ?? []);

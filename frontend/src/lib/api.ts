@@ -4,15 +4,15 @@
  * - Inyecta automáticamente el Bearer token desde localStorage ("app_token").
  * - Un 401 llama a logout() y lanza ApiError (redirige a /login).
  * - Expone `api.get/post/put/delete` genéricos y `endpoints` con métodos nombrados.
- * - Base URL: variable de entorno VITE_API_URL (fallback: http://127.0.0.1:8000).
+ * - Base URL (API_URL): variable de entorno VITE_API_URL (fallback: el backend en Render).
  *
- * Nota: PeakHourCard.tsx y EtlHistoryTable.tsx usan fetch directo en lugar de este módulo.
+ * Nota: los componentes que usan fetch directo deben importar API_URL de aquí.
  */
 
 import { getToken, logout } from "./auth";
 
-// Usar 127.0.0.1 explícitamente para que coincida con el CORS del backend
-const BASE_URL = (import.meta.env.VITE_API_URL as string) || "https://dwh-spotify-wrapped.onrender.com";
+// Única definición de la dirección del backend. En local se define VITE_API_URL en .env.local.
+export const API_URL = (import.meta.env.VITE_API_URL as string) || "https://dwh-spotify-wrapped.onrender.com";
 
 export class ApiError extends Error {
   constructor(
@@ -37,7 +37,7 @@ async function request<T>(
   const { body, params, headers: extraHeaders, ...rest } = options;
 
   // Build URL with optional query params
-  const url = new URL(`${BASE_URL}${path}`);
+  const url = new URL(`${API_URL}${path}`);
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
   }
