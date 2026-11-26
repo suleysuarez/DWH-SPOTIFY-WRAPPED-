@@ -15,9 +15,8 @@ import { Skeleton } from "@/components/ui/SkeletonCard";
 import ErrorState from "@/components/ui/ErrorState";
 import { Clock } from "lucide-react";
 import { getToken } from "@/lib/auth";
+import { API_URL } from "@/lib/api";
 import { formatHour, toLocalHour } from "@/lib/time";
-
-const API_BASE = (import.meta.env.VITE_API_URL as string) || "https://dwh-spotify-wrapped.onrender.com";
 
 type Period = "day" | "week" | "month" | "all";
 
@@ -106,8 +105,8 @@ export default function PeakHourCard() {
         const qs = period !== "all" ? `?period=${period}` : "";
         const headers = { Authorization: `Bearer ${token}` };
         const [peakRes, distRes] = await Promise.all([
-          fetch(`${API_BASE}/v1/history/peak-hour${qs}`, { headers }),
-          fetch(`${API_BASE}/v1/history/peak-hour/distribution${qs}`, { headers }),
+          fetch(`${API_URL}/v1/history/peak-hour${qs}`, { headers }),
+          fetch(`${API_URL}/v1/history/peak-hour/distribution${qs}`, { headers }),
         ]);
         if (!peakRes.ok || !distRes.ok) throw new Error("Error al cargar datos");
         const [peakJson, distJson] = await Promise.all([peakRes.json(), distRes.json()]);

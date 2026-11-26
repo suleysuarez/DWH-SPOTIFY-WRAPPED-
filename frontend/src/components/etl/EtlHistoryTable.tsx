@@ -11,16 +11,14 @@
  *   - El filtro de status (select) reinicia la lista al cambiar.
  *   - Cada fila es expandible para ver el detalle completo de la ejecución.
  *
- * Nota: usa fetch directo con getToken() en lugar de lib/api.ts, y tiene
- * hardcodeado `API_BASE = "http://127.0.0.1:8000"`.
+ * Nota: usa fetch directo con getToken(); la dirección del backend es API_URL de lib/api.ts.
  * La fecha se formatea con `es-CO` locale y timezone America/Bogota.
  */
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Skeleton } from "@/components/ui/SkeletonCard";
 import { getToken } from "@/lib/auth";
+import { API_URL } from "@/lib/api";
 import { CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, Filter, ChevronRight } from "lucide-react";
-
-const API_BASE = "http://127.0.0.1:8000";
 
 interface EtlRun {
   id: number;
@@ -83,7 +81,7 @@ function DetailPanel({ run }: { run: EtlRun }) {
     setShowTracks(true);
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE}/v1/etl/${run.id}/tracks`, {
+      const res = await fetch(`${API_URL}/v1/etl/${run.id}/tracks`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -212,7 +210,7 @@ export default function EtlHistoryTable() {
         offset: String(offset),
       });
       if (filter) params.set("status", filter);
-      const res = await fetch(`${API_BASE}/v1/etl/history?${params}`, {
+      const res = await fetch(`${API_URL}/v1/etl/history?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
