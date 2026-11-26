@@ -9,15 +9,8 @@ import AppLayout from "@/components/layout/AppLayout";
 import EmptyState from "@/components/ui/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { endpoints } from "@/lib/api";
+import { formatHour, toLocalHour } from "@/lib/time";
 import type { WrappedSummary } from "@/types/history";
-
-/** Convierte una hora UTC (0-23) a la hora local del navegador. */
-function toLocalHour(hourUtc: number): number {
-  const offsetHours = Math.floor(new Date().getTimezoneOffset() / 60);
-  return (hourUtc - offsetHours + 24) % 24;
-}
-
-const formatHour = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
 function Card({ label, delay, children }: { label: string; delay: number; children: ReactNode }) {
   return (
