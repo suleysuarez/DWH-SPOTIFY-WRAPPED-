@@ -142,6 +142,7 @@ class EtlAudit(Base):
     cursor_after_ms = Column(String(50), nullable=True)
     cursor_next_ms = Column(String(50), nullable=True)
     is_full_run = Column(Boolean, default=False, nullable=False, server_default="false")
+    trigger_source = Column(String(20), nullable=True)  # "manual" | "scheduled"
 
 
 class PkceSessions(Base):
