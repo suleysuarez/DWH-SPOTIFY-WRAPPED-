@@ -104,12 +104,11 @@ export default function FavoriteSongSection({ stats, loading, placeholderRef }: 
           </motion.div>
         )}
 
-        {/* Video decorativo: Jhonatan */}
-        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, aspectRatio: "1 / 1", maxWidth: "42%", zIndex: 1, overflow: "hidden" }}>
-          <video autoPlay loop muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}>
-            <source src="/videos/jhon.mp4" type="video/mp4" />
+        {/* Video decorativo: audífonos */}
+        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "42%", zIndex: 1, mixBlendMode: "screen" }}>
+          <video autoPlay loop muted playsInline aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center right" }}>
+            <source src="/videos/icono_audifonos.mp4" type="video/mp4" />
           </video>
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #070d07 0%, transparent 38%)" }} />
         </div>
       </div>
     </PanelReveal>

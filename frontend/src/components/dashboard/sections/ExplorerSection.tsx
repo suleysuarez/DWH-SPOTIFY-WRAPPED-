@@ -28,9 +28,11 @@ export default function ExplorerSection({ totalArtists, totalPlays, loading }: {
           </Tilt3D>
         </div>
 
-        <div style={{ position: "absolute", right: 0, bottom: 0, top: 0, width: "44%", zIndex: 1 }}>
-          <img src="/images/img_04.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "65% center" }} />
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #0f0a1a 0%, transparent 35%)" }} />
+        {/* Video decorativo: piano */}
+        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "44%", zIndex: 1, mixBlendMode: "screen" }}>
+          <video autoPlay loop muted playsInline aria-hidden="true" style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center right" }}>
+            <source src="/videos/piano.mp4" type="video/mp4" />
+          </video>
         </div>
       </div>
     </PanelReveal>
