@@ -141,6 +141,8 @@ Cada ejecución de `POST /v1/etl/run` crea un `EtlAudit`:
 2. Al finalizar con éxito: `status = "success"` + contadores + cursor.
 3. Si hay error: `status = "error"` + `error_message`.
 
+`trigger_source` indica quién lanzó la ejecución: `scheduled` (GitHub Actions por cron) o `manual`. En ejecuciones anteriores a la migración 005 queda vacío.
+
 Los últimos 5 audits son visibles en `GET /v1/etl/status`. El historial completo paginado en `GET /v1/etl/history`.
 
 ---

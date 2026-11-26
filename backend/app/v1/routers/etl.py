@@ -54,6 +54,11 @@ def run_etl(
     current_user: DimUsers = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Lanza el ETL a petición del usuario (queda registrado como manual)."""
+    return execute_etl(current_user, db, trigger_source="manual")
+
+
+def execute_etl(current_user: DimUsers, db: Session, trigger_source: str):
     """
     Ejecuta el pipeline ETL.
 
@@ -115,6 +120,7 @@ def run_etl(
         status="running",
         started_at=datetime.utcnow(),
         is_full_run=is_full_run,
+        trigger_source=trigger_source,
     )
     db.add(audit)
     db.commit()
@@ -450,6 +456,7 @@ def get_etl_history(
             "tracks_new": audit.tracks_new or 0,
             "history_new": audit.history_new or 0,
             "history_skipped": audit.history_skipped or 0,
+            "trigger_source": audit.trigger_source,
         }
         for audit in audits
     ]

@@ -38,10 +38,17 @@ def report(message: str) -> None:
     print(message, flush=True)
 
 
+def trigger_source(event_name) -> str:
+    return "scheduled" if event_name == "schedule" else "manual"
+
+
 def main() -> int:
     from app.core.database import get_db
     from app.models.models import DimUsers
-    from app.v1.routers.etl import run_etl
+    from app.v1.routers.etl import execute_etl
+
+    # En GitHub Actions, "schedule" es el cron; el botón Run workflow cuenta como manual.
+    source = trigger_source(os.environ.get("GITHUB_EVENT_NAME"))
 
     db_gen = get_db()
     db = next(db_gen)
@@ -56,7 +63,7 @@ def main() -> int:
         for user in users:
             spotify_id, number = user.spotify_id, user.user_id
             try:
-                result = run_etl(current_user=user, db=db)
+                result = execute_etl(user, db, trigger_source=source)
                 if result["status"] != "success":
                     failures += 1
                     logger.error("ETL de %s falló: %s", spotify_id, result["message"])

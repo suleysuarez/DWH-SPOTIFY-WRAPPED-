@@ -33,10 +33,18 @@ interface EtlRun {
   tracks_new: number;
   history_new: number;
   history_skipped: number;
+  /** null en las ejecuciones anteriores a que se registrara el origen. */
+  trigger_source: "manual" | "scheduled" | null;
 }
 
 const STATUS_LABELS: Record<string, string> = { success: "Exitosa", error: "Error", running: "En curso" };
 const STATUS_COLORS: Record<string, string> = { success: "#1DB954", error: "#e74c3c", running: "#f39c12" };
+
+function OriginLabel({ source }: { source: EtlRun["trigger_source"] }) {
+  if (source === "scheduled") return <span className="font-semibold text-[#4f8ef7]">Programada</span>;
+  if (source === "manual") return <span className="text-white/70">Manual</span>;
+  return <span className="text-white/30">—</span>;
+}
 
 function StatusBadge({ status }: { status: string }) {
   const color = STATUS_COLORS[status] || "rgba(255,255,255,0.4)";
@@ -98,7 +106,7 @@ function DetailPanel({ run }: { run: EtlRun }) {
 
   return (
     <tr>
-      <td colSpan={5} className="pb-3 pt-0">
+      <td colSpan={6} className="pb-3 pt-0">
         <div
           className="rounded-xl p-4 text-xs"
           style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
@@ -299,6 +307,7 @@ export default function EtlHistoryTable() {
               <tr className="text-white/30 border-b border-white/5">
                 <th className="text-left pb-2 pr-3 font-medium">Inicio</th>
                 <th className="text-left pb-2 pr-3 font-medium">Tipo</th>
+                <th className="text-left pb-2 pr-3 font-medium">Origen</th>
                 <th className="text-left pb-2 pr-3 font-medium">Duración</th>
                 <th className="text-left pb-2 pr-3 font-medium">Nuevos</th>
                 <th className="text-left pb-2 font-medium">Estado</th>
@@ -327,6 +336,7 @@ export default function EtlHistoryTable() {
                         {run.run_type === "full" ? "Full" : "Incremental"}
                       </span>
                     </td>
+                    <td className="py-2.5 pr-3"><OriginLabel source={run.trigger_source} /></td>
                     <td className="py-2.5 pr-3 text-white/50">
                       {run.duration_seconds != null ? `${run.duration_seconds}s` : "—"}
                     </td>
