@@ -141,7 +141,7 @@ pnpm dev   # puerto 3000
 
 ## Sincronización automática
 
-`.github/workflows/sync-etl.yml` ejecuta `backend/scripts/sync_etl.py` cada 2 h 30 min contra la base de producción.
+`.github/workflows/sync-etl.yml` ejecuta `backend/scripts/sync_etl.py` cada hora (minuto 17) contra la base de producción.
 También se puede lanzar a mano desde **Actions → Sincronizar ETL → Run workflow**.
 
 Secretos necesarios (**Settings → Secrets and variables → Actions**), con los mismos valores que Render:
